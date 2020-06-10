@@ -1,0 +1,4 @@
+## General
+/__pycache__/*
+/output/*
+/report/*
