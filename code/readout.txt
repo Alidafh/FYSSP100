@@ -1,0 +1,135 @@
+30/7/2020 kl.20:32:
+Plotting the invariant mass distribution with rebin = 20.00
+      figure saved in: output/figures/mass_plot_125_20.png
+
+For a Luminosity scale: 1.0
+      figure saved in: output/figures/expected_mass_window_1.png
+      maximum expected significance: 2.04 at mass window 7.15
+      maximum observed significance: 3.92 at mass window 2.85
+
+For a Luminosity scale: 5.0
+      figure saved in: output/figures/expected_mass_window_5.png
+      maximum expected significance: 4.79 at mass window 6.55
+      maximum observed significance: 7.99 at mass window 2.85
+
+Finding the lowest Luminosity required for discovery
+      Expected significance: 5.07 at width 6.15 and luminosity 5.51
+
+
+Using optimal signal region width 7.15 and bkg. scale factor 1.11:
+      unscaled bkg. events: 4.640
+      scaled bkg. events:   5.151 -0.278 +0.325
+      unscaled sig. events: 5.409
+
+Calculating the expected significance using 100 toys:
+      p-value = 0.020, sigificance = 2.054
+
+Calculating test-statisitic for real data:
+      t = -11.532
+
+Need to calculate distributions for test-statistics
+This may take some time. Continue? [y]y
+Generating test-statistic distribution for background-only hypothesis
+calculating ... (0/10000)
+calculating ... (1000/10000)
+calculating ... (2000/10000)
+calculating ... (3000/10000)
+calculating ... (4000/10000)
+calculating ... (5000/10000)
+calculating ... (6000/10000)
+calculating ... (7000/10000)
+calculating ... (8000/10000)
+calculating ... (9000/10000)
+
+Generating test-statistic distribution for signal+background hypothesis
+calculating ... (0/10000)
+calculating ... (1000/10000)
+calculating ... (2000/10000)
+calculating ... (3000/10000)
+calculating ... (4000/10000)
+calculating ... (5000/10000)
+calculating ... (6000/10000)
+calculating ... (7000/10000)
+calculating ... (8000/10000)
+calculating ... (9000/10000)
+Quantiles for b-only:
+      +2 sigma: t = -3.65
+      +1 sigma: t = 0.69
+      +0 sigma: t = 4.57
+      -1 sigma: t = 7.86
+      -2 sigma: t = 10.59
+
+Quantiles for s+b:
+      +2 sigma: t = -18.03
+      +1 sigma: t = -11.58
+      +0 sigma: t = -5.60
+      -1 sigma: t = -0.39
+      -2 sigma: t = 4.28
+
+Plotting the test-statistic distributions..
+      figure saved in output/figures/distribution_test_statistic.png
+
+        Median b-only     Median s+b   Data
+t:      4.57e+00          -5.60e+00     -1.15e+01
+1-CLb:  4.82e-01          8.90e-03     1.00e-04
+CLs+b:  2.18e-02          5.00e-01     8.42e-01
+CLs:    4.20e-02          5.05e-01     8.42e-01
+
+
+
+
+##############################################################################
+02.08.20 kl.13:54. (Quick run)
+
+Plotting the invariant mass distribution with rebin = 20.00
+      figure saved in: output/figures/mass_plot_125_20.png
+
+For a Luminosity scale: 1.0
+      figure saved in: output/figures/expected_mass_window_1.png
+      maximum expected significance: 2.04 at mass window 7.15
+      maximum observed significance: 3.92 at mass window 2.85
+
+For a Luminosity scale: 5.0
+      figure saved in: output/figures/expected_mass_window_5.png
+      maximum expected significance: 4.79 at mass window 6.55
+      maximum observed significance: 7.99 at mass window 2.85
+
+Finding the lowest Luminosity required for discovery
+      Expected significance: 5.07 at width 6.15 and luminosity 5.51
+
+
+Using optimal signal region width 7.15 and bkg. scale factor 1.11:
+      unscaled bkg. events: 4.640
+      scaled bkg. events:   5.151 -0.278 +0.325
+      unscaled sig. events: 5.409
+
+Calculating the expected significance using 100 toys:
+      p-value = 0.030, sigificance = 1.881
+
+Calculating test-statisitic for real data:
+      t = -11.532
+
+Quantiles for b-only:
+      +2 sigma: t = -3.65
+      +1 sigma: t = 0.69
+      +0 sigma: t = 4.57
+      -1 sigma: t = 7.86
+      -2 sigma: t = 10.59
+
+Quantiles for s+b:
+      +2 sigma: t = -18.03
+      +1 sigma: t = -11.58
+      +0 sigma: t = -5.60
+      -1 sigma: t = -0.39
+      -2 sigma: t = 4.28
+
+        Median     Median     Median
+        b-only      s+b        data
+t:     4.57e+00  -5.60e+00  -1.15e+01
+1-CLb: 4.82e-01   8.90e-03   1.00e-04
+      (0.046389) (2.369752) (3.719016)
+CLs+b: 2.18e-02   5.00e-01   8.42e-01
+CLs:   4.20e-02   5.05e-01   8.42e-01
+
+Plotting the test-statistic distributions:
+      figure saved in output/figures/distribution_test_statistic.png
