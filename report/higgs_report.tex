@@ -1,0 +1,112 @@
+\documentclass[10pt, aps, twocolumn, a4paper, nofootinbib]{revtex4}
+\usepackage[T1]{fontenc} %for å bruke æøå
+\usepackage[utf8]{inputenc}
+%\usepackage[margin=0.7in]{geometry} % adjust margins etc. 
+\usepackage{fancyhdr} %control headers and footers
+\usepackage[pdftex]{graphicx}   % add images 
+\usepackage{subfig} % allow sub-floats
+\usepackage{float}  % floating figures like tables and images in text
+\usepackage[font=small,labelfont=bf]{caption}  %fix captions
+\usepackage{color}  %colour for to-do and others 
+\usepackage{physics}    % equ. enviroment and symbols seems to be the same as amsmath, amssymb
+\usepackage{hyperref}   % links to websites
+
+
+%\DeclareMathSizes{10pt}{9pt}{7pt}{5pt}
+
+
+%------------------------------------------------------------------------
+%		New characters
+%------------------------------------------------------------------------
+\def\ans#1{\underline{\underline{#1}}}	%two lines under answer
+\def\bs#1{\boldsymbol{#1}}	%make symbols bold
+\def\vx{v_x}
+\def\vy{v_y}
+\def\vz{v_z}
+\def\P{\mathcal{P}}
+\def\intinf{\int_{-\infty}^{\infty}}
+\def\tb{\tilde{b}}
+\def\td{\tilde{d}}
+\def\tv{\tilde{v}}
+\def\vv{\overline{v}}
+\def\uu{\overline{u}}
+
+\def\pa{^{234}_{91}\text{Pa}^m}
+\def\ba{^{137}_{56}\text{Ba}^m }
+
+\newcommand{\ins}[1]{{\scaleto{#1}{5pt}}}
+\newcommand{\todo}[1]{\textcolor{red}{#1}}	%red writing for notes 
+\newcommand{\blue}[1]{\textcolor{blue}{#1}}	%colours
+\newcommand{\green}[1]{\textbf{\textcolor{green}{#1}}}	%colours
+\newcommand{\purple}[1]{\textbf{\textcolor{purple}{#1}}}	%colours
+\newcommand{\mpurple}[1]{\mathbf{\textcolor{purple}{#1}}}	%colours
+
+\makeatletter % make bold unit vectors 
+\newcommand{\bhat}[1]{\boldsymbol{\hat{\textbf{#1}}}}
+\makeatother
+
+%\usepackage{abstract}
+%\renewcommand{\abstractname}{}    % clear the title
+%\renewcommand{\absnamepos}{empty}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=magenta,
+    urlcolor=blue,
+}
+\urlstyle{same}
+
+\pagestyle{fancy}
+\lfoot{FYSSP100}
+\rfoot{\today}
+%\lhead{}
+%\chead{}
+%\rhead{}
+
+%\renewcommand{\headrulewidth}{0pt} %line in header 
+%\captionsetup{compatibility=false}
+%------------------------------------------------------------------------
+%		Document begins here
+%------------------------------------------------------------------------
+
+\begin{document}
+\title{FYSSP100}
+\author{H. Alida F. Hardersen}
+\affiliation{Fysisk Institutt, Universitetet i Oslo}
+\date{\today}
+
+\begin{abstract}
+    \centering ABSTRACT
+\end{abstract}
+\maketitle
+
+\section{Introduction}
+
+\section{Counting experiment}
+\section{Likelihood}
+\section{Hypothesis testing}
+
+
+\section{Optimizing the mass window}
+
+
+\section{Part 1}
+
+\begin{figure}
+\includegraphics[width=\linewidth]{../code/output/figures/mass_plot_125_20.png}
+\caption{CAPTION\label{fig:mass_plot_125}}
+\end{figure}
+
+\begin{figure}
+\includegraphics[width=\linewidth]{../code/output/figures/expected_mass_window_1.png}
+\caption{CAPTION\label{fig:mass_window_1}}
+\end{figure}
+
+\begin{figure}
+\includegraphics[width=\linewidth]{../code/output/figures/expected_mass_window_5.png}
+\caption{\label{fig:mass_window_5}}
+\end{figure}
+
+
+\end{document}
