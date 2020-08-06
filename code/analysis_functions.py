@@ -41,113 +41,129 @@ def GetMassDistribution(type, scaleFactor = 1):
     return h_mass
 
 def MassPlot(rebinN):
-    """
-    plots the mass distribution
-    rebin: rebin histograms for better plotting
-    """
-    print("Plotting the invariant mass distribution with rebin = {:.2f}".format(rebinN))
-    hist_signal = GetMassDistribution(0)
-    hist_bkg = GetMassDistribution(2)
-    hist_data = GetMassDistribution(3)
+	"""
+	plots the mass distribution
+	rebin: rebin histograms for better plotting
+	"""
+	print("Plotting the invariant mass distribution with rebin = {:.2f}".format(rebinN))
+	hist_signal = GetMassDistribution(0)
+	hist_bkg = GetMassDistribution(2)
+	hist_data = GetMassDistribution(3)
 
-    # Rebin histograms
-    hist_signal.Rebin(rebinN)
-    hist_bkg.Rebin(rebinN)
-    hist_data.Rebin(rebinN)
+	# Rebin histograms
+	hist_signal.Rebin(rebinN)
+	hist_bkg.Rebin(rebinN)
+	hist_data.Rebin(rebinN)
 
-    # make signal+bkg histogram
-    hist_sb = hist_bkg.Clone("hist_sb")
-    hist_sb.Add(hist_signal)
+	# make signal+bkg histogram
+	hist_sb = hist_bkg.Clone("hist_sb")
+	hist_sb.Add(hist_signal)
 
-    hist_sb.SetFillColor(7)
-    hist_sb.SetAxisRange(0, 22, "Y")
-    hist_sb.SetAxisRange(0,400, "X")
-    hist_bkg.SetFillColor(2)
+	hist_sb.SetFillColor(7)
+	hist_sb.SetAxisRange(0, 22, "Y")
+	hist_sb.SetAxisRange(0,400, "X")
+	hist_bkg.SetFillColor(2)
 
-    legend = ro.TLegend(0.75, 0.75, 0.90, 0.85)
-    legend.AddEntry(hist_sb, "Higgs signal", "f")
-    legend.AddEntry(hist_bkg, "Background", "f")
-    legend.AddEntry(hist_data, "Data", "p")
+	legend = ro.TLegend(0.75, 0.75, 0.90, 0.85)
+	legend.AddEntry(hist_sb, "Higgs signal", "f")
+	legend.AddEntry(hist_bkg, "Background", "f")
+	legend.AddEntry(hist_data, "Data", "p")
 
-    c = ro.TCanvas("c", "c", 1000, 600)
-    hist_sb.Draw("hist")
-    hist_sb.GetYaxis().SetTitle("Events/ {:.1f} GeV".format(hist_sb.GetBinWidth(1)))
-    hist_bkg.Draw("same")
-    hist_data.Draw("e same")
-    legend.Draw("same")
-    c.Update()
-    Quiet(c.SaveAs)("output/figures/mass_plot_125_{}.png".format(rebinN))
-    print("      figure saved in: output/figures/mass_plot_125_{}.png\n".format(rebinN))
+	sr1 = ro.TLine(150, 0, 150, 20)
+	sr1.SetLineStyle(7)
+
+	asr1 = ro.TArrow(150, 12, 170, 12, 0.01, "-|>")
+
+	c = ro.TCanvas("c", "c", 1000, 600)
+	hist_sb.Draw("hist")
+	hist_sb.GetYaxis().SetTitle("Events/ {:.1f} GeV".format(hist_sb.GetBinWidth(1)))
+	hist_bkg.Draw("same")
+	hist_data.Draw("e same")
+	sr1.Draw()
+	asr1.Draw()
+	text(0.38, 0.65, "Sideband", size=0.022)
+	text(0.385, 0.63, "Region", size=0.022)
+	legend.Draw()
+
+	c.Update()
+	Quiet(c.SaveAs)("output/figures/mass_plot_125_{}.png".format(rebinN))
+	print("      figure saved in: output/figures/mass_plot_125_{}.png\n".format(rebinN))
 
 def Significance_Optimization(LumiScale, plot="no"):
-    # Get histograms
-    if plot != "no": print("For a Luminosity scale: {:.1f}".format(LumiScale))
-    hist_signal = GetMassDistribution(0, LumiScale)
+	"""
+	Finds the mass window that gives the highest expected significance
+		LumiScale - If you want to scale the luminosity,
+		plot="no" - If a figure is desired, do plot="plot"
+	"""
+	# Get histograms
+	if plot != "no": print("For a Luminosity scale: {:.1f}".format(LumiScale))
+	hist_signal = GetMassDistribution(0, LumiScale)
+	hist_bkg = GetMassDistribution(2, LumiScale)
+	hist_data = GetMassDistribution(3, LumiScale)
+
+	hist_window = ro.TH1D("h_masswindow", ";m_{4l} GeV; ",250,0.,25.); # make a mass window - full width between 0 and 25 GeV
+	hist_window_exp = ro.TH1D("h_masswindow_expected",";width [GeV]; Significance Z",250,0.,25.);
+	hist_window_obs = ro.TH1D("h_masswindow_observed",";width [GeV]; Significance Z",250,0.,25.);
+
+	nbins = hist_window.GetNbinsX()
+	for i in range(nbins):
+		window_width = hist_window.GetBinCenter(i)
+		#print("Trying mass window: {:.2f}\n".format(window_width))
+		x1 = 125-0.5*window_width
+		x2 = 125+0.5*window_width
+		ndata = hist_data.Integral(hist_data.FindBin(x1), hist_data.FindBin(x2))
+		nbkg  = hist_bkg.Integral(hist_bkg.FindBin(x1), hist_bkg.FindBin(x2))
+		nsig  = hist_signal.Integral(hist_signal.FindBin(x1), hist_signal.FindBin(x2))
+
+		if( (nbkg+nsig)<1 ): continue
+
+		#Calculating the expected significance
+		exp_p = 1 - IntegratePoisson(nsig+nbkg, nbkg)
+		exp_z = ro.Math.normal_quantile_c(exp_p, 1)
+		hist_window_exp.SetBinContent(i, exp_z)
+
+		# Calculating observed significance
+		obs_p = 1 - IntegratePoisson(ndata, nbkg)
+		obs_z = ro.Math.normal_quantile_c(obs_p, 1)
+		hist_window_obs.SetBinContent(i, obs_z)
+
+	if plot=="plot":
+		# plot the results and save figure
+		c = ro.TCanvas("c{}".format(LumiScale), "c", 1000, 600)
+		#legend = ro.TLegend(0.75, 0.75, 0.90, 0.85)
+		legend = ro.TLegend(0.75, 0.79, 0.93, 0.93)
+		legend.AddEntry(hist_window_exp, "Expected", "l")
+		hist_window_obs.SetLineColor(1)
+		hist_window_exp.SetLineColor(4)
+
+		if( abs(LumiScale-1.00) < 0.01 ):
+		    hist_window_obs.Draw("L same")
+		    legend.AddEntry(hist_window_obs, "Observed", "l")
+
+		hist_window_exp.Draw("L same")
+		legend.Draw()
+		c.Update()
+		Quiet(c.SaveAs)("output/figures/expected_mass_window_{}.png".format(LumiScale))
+		print("      figure saved in: output/figures/expected_mass_window_{}.png".format(LumiScale))
+
+	# Find the mass window that maximises the significance:
+	max_exp = hist_window_exp.GetMaximum()
+	bin_exp = hist_window_exp.GetMaximumBin()
+	bestwidth_exp = hist_window_exp.GetXaxis().GetBinCenter(bin_exp)
+
+	max_obs = hist_window_obs.GetMaximum()
+	bin_obs = hist_window_obs.GetMaximumBin()
+	bestwidth_obs = hist_window_obs.GetXaxis().GetBinCenter(bin_obs)
+
+	if plot != "no" :print("      maximum expected significance: {:.2f} at mass window {:.2f}".format(max_exp, bestwidth_exp))
+	if plot != "no" :print("      maximum observed significance: {:.2f} at mass window {:.2f}\n".format(max_obs, bestwidth_obs))
+
+	return max_exp, bestwidth_exp
+
+def sideband_fit(rebinN=1, LumiScale=1):
+    #Sideband fit
     hist_bkg = GetMassDistribution(2, LumiScale)
     hist_data = GetMassDistribution(3, LumiScale)
-
-    hist_window = ro.TH1D("h_masswindow", ";m_{4l} GeV; ",250,0.,25.); # make a mass window - full width between 0 and 25 GeV
-    hist_window_exp = ro.TH1D("h_masswindow_expected",";width [GeV]; Significance Z",250,0.,25.);
-    hist_window_obs = ro.TH1D("h_masswindow_observed",";width [GeV]; Significance Z",250,0.,25.);
-
-    nbins = hist_window.GetNbinsX()
-    for i in range(nbins):
-        window_width = hist_window.GetBinCenter(i)
-        #print("Trying mass window: {:.2f}\n".format(window_width))
-        x1 = 125-0.5*window_width
-        x2 = 125+0.5*window_width
-        ndata = hist_data.Integral(hist_data.FindBin(x1), hist_data.FindBin(x2))
-        nbkg  = hist_bkg.Integral(hist_bkg.FindBin(x1), hist_bkg.FindBin(x2))
-        nsig  = hist_signal.Integral(hist_signal.FindBin(x1), hist_signal.FindBin(x2))
-
-        if( (nbkg+nsig)<1 ): continue
-
-        #Calculating the expected significance
-        exp_p = 1 - IntegratePoisson(nsig+nbkg, nbkg)
-        exp_z = ro.Math.normal_quantile_c(exp_p, 1)
-        hist_window_exp.SetBinContent(i, exp_z)
-
-        # Calculating observed significance
-        obs_p = 1 - IntegratePoisson(ndata, nbkg)
-        obs_z = ro.Math.normal_quantile_c(obs_p, 1)
-        hist_window_obs.SetBinContent(i, obs_z)
-
-    if plot=="plot":
-        # plot the results and save figure
-        c = ro.TCanvas("c{}".format(LumiScale), "c", 1000, 600)
-        legend = ro.TLegend(0.75, 0.75, 0.90, 0.85)
-        legend.AddEntry(hist_window_exp, "Expected", "l")
-        hist_window_obs.SetLineColor(1)
-        hist_window_exp.SetLineColor(4)
-
-        if( abs(LumiScale-1.00) < 0.01 ):
-            hist_window_obs.Draw("L same")
-            legend.AddEntry(hist_window_obs, "Observed", "l")
-
-        hist_window_exp.Draw("L same")
-        legend.Draw()
-        c.Update()
-        Quiet(c.SaveAs)("output/figures/expected_mass_window_{}.png".format(LumiScale))
-        print("      figure saved in: output/figures/expected_mass_window_{}.png".format(LumiScale))
-
-    # Find the mass window that maximises the significance:
-    max_exp = hist_window_exp.GetMaximum()
-    bin_exp = hist_window_exp.GetMaximumBin()
-    bestwidth_exp = hist_window_exp.GetXaxis().GetBinCenter(bin_exp)
-
-    max_obs = hist_window_obs.GetMaximum()
-    bin_obs = hist_window_obs.GetMaximumBin()
-    bestwidth_obs = hist_window_obs.GetXaxis().GetBinCenter(bin_obs)
-
-    if plot != "no" :print("      maximum expected significance: {:.2f} at mass window {:.2f}".format(max_exp, bestwidth_exp))
-    if plot != "no" :print("      maximum observed significance: {:.2f} at mass window {:.2f}\n".format(max_obs, bestwidth_obs))
-
-    return max_exp, bestwidth_exp
-
-def sideband_fit(rebinN=1):
-    #Sideband fit
-    hist_bkg = GetMassDistribution(2)
-    hist_data = GetMassDistribution(3)
 
     hist_bkg.Rebin(rebinN)
     hist_data.Rebin(rebinN)
@@ -444,19 +460,20 @@ def analyze_distributions(h_teststat_bkg, h_teststat_sb, t_data, plot=0):
 	#return c
 
 if __name__ == "__main__":
-    #s = count_events(0)
-    #b = 5.134
-    #db = 0.305
-    #s = 5.96
-    #b = 7.10
-    #db = 0.41
-    #Ntoys = 1e6
-    #p = ExpectedSignificance_ToyMC(b, s, db ,Ntoys)
-    hist_data = GetMassDistribution(3)
-    hist_signal = GetMassDistribution(0)
-    hist_bkg = GetMassDistribution(2)
+	#s = count_events(0)
+	#b = 5.134
+	#db = 0.305
+	#s = 5.96
+	#b = 7.10
+	#db = 0.41
+	#Ntoys = 1e6
+	#p = ExpectedSignificance_ToyMC(b, s, db ,Ntoys)
+	#hist_data = GetMassDistribution(3)
+	hist_signal = GetMassDistribution(0)
+	MassPlot(20)
+	#hist_bkg = GetMassDistribution(2)
 
-    xx = Get_TestStatistic(hist_data, hist_bkg, hist_signal)
+	#xx = Get_TestStatistic(hist_data, hist_bkg, hist_signal)
 
-    hist_test = GenerateToyDataSet(hist_signal)
+	#hist_test = GenerateToyDataSet(hist_signal)
 	# print("TestStatistics = ",higgs.GetTestStatistics(h_data, h_bgd, h_sig))
