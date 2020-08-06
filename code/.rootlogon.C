@@ -6,11 +6,12 @@ TStyle *style= new TStyle("style","Alida style");
 
 // use plain black on white colors
 Int_t icol=0; // WHITE
-style->SetFrameBorderMode(icol);
+//style->SetFrameBorderMode(icol);
 style->SetFrameFillColor(icol);
 style->SetCanvasBorderMode(icol);
 style->SetCanvasColor(icol);
 style->SetPadBorderMode(icol);
+//style->SetPadBorderMode(1);
 style->SetPadColor(icol);
 style->SetStatColor(icol);
 style->SetPaperSize(20,26);
@@ -20,6 +21,7 @@ style->SetPadBottomMargin(0.16);
 style->SetPadLeftMargin(0.16);
 style->SetTitleXOffset(1.4);
 style->SetTitleYOffset(1.4);
+style->SetLegendBorderSize(0);
 
 Int_t font=42; // Helvetica
 Double_t tsize=0.04;
@@ -45,6 +47,7 @@ style->SetEndErrorSize(0.);
 style->SetOptTitle(0);
 style->SetOptStat(0);
 style->SetOptFit(0);
+//style->SetBorderSize(0)
 //style->SetPadTickX(1);
 //style->SetPadTickY(1);
 gROOT->SetStyle("style");
