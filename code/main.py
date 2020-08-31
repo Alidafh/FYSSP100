@@ -35,18 +35,6 @@ for i in range(len(LumiScales)):
         best_lumi = LumiScales[i]
         break
 
-"""
-plt.figure(1)
-plt.plot(LumiScales, z_array)
-plt.xlabel("Luminosity scale factro")
-plt.ylabel("Significance, Z")
-plt.show()
-quit()
-"""
-
-# Plot this.
-#exp_significance_lumiX, width_lumiX = analysis.Significance_Optimization(best_lumi, "plot")
-
 ################################################################################
 # Preform sideband fit to find bkg-scale factor
 bestalpha, sigmalow, sigmaup = analysis.sideband_fit()
@@ -74,9 +62,7 @@ d_nbkg_scaled = sigmaup*nbkg        # Unc. on the scaled bkg estimate
 print("      scaled bkg. events:   {:.3f} -{:.3f} +{:.3f}\n".format(nbkg_scaled, sigmalow*nbkg, sigmaup*nbkg))
 
 # Calculate the expected and observed significance with new background estimate
-
-if int(sys.argv[1]) == 0: Ntoys = 100
-if int(sys.argv[1]) != 0: Ntoys = 1e6
+Ntoys = 1e6
 
 d_nbkg = 0.10                       # Error on the bkg estimate
 d_nbkg_scaled = sigmaup*nbkg        # Error on the scaled bkg estimate
@@ -116,8 +102,6 @@ print("      t = {:.3f}\n".format(t_data))
 ###############################################################################
 # Execute toy generator before moving on, if this is already calculated there
 # is no need to do it again.
-#(ntoys, sf_bkg= 1, sf_sig=1, rebinN=1)
-
 if int(sys.argv[1]) != 0:
     analysis.Generate_toys(10000, 1, 1, 1)
 
@@ -130,7 +114,7 @@ hist_distribution_b = infile.Get(histograms[0]).Clone("h_tdist_b")
 hist_distribution_sb = infile.Get(histograms[1]).Clone("h_tdist_sb")
 infile.Close()
 
-analysis.analyze_distributions(hist_distribution_b, hist_distribution_sb, t_data, "plot")
+zCLb_sb1, zCLsb_b1 = analysis.analyze_distributions(hist_distribution_b, hist_distribution_sb, t_data, "plot")
 
 
 ###############################################################################
@@ -147,7 +131,7 @@ def new_scales(sfb, sfs, rebinN, ntoys):
     t_obs_scaled = analysis.Get_TestStatistic(hist_dat_scaled, hist_bkg_scaled, hist_sig_scaled)
     print("      t = {:.3f}\n".format(t_obs_scaled))
 
-    analysis.Generate_toys(ntoys, sfb, sfs, rebinN)
+    if int(sys.argv[1]) != 0: analysis.Generate_toys(ntoys, sfb, sfs, rebinN)
 
     histograms = ["test_statistic_bkg", "test_statistic_sb"]
     infile1 = ro.TFile("output/histograms/test_statistic_distribution_sfb{}_sfs{}_toys{}_bin{}.root".format(sfb, sfs, ntoys,rebinN), "READ")
@@ -155,21 +139,22 @@ def new_scales(sfb, sfs, rebinN, ntoys):
     hist_dist_sb_scaled = infile1.Get(histograms[1]).Clone("h_tdist_sb_scaled")
     infile1.Close()
 
-    analysis.analyze_distributions(hist_dist_b_scaled, hist_dist_sb_scaled, t_obs_scaled, "plot")
-
+    CLb_sb, CLsb_b = analysis.analyze_distributions(hist_dist_b_scaled, hist_dist_sb_scaled, t_obs_scaled, "plot")
+    return CLb_sb, CLsb_b
     print(" ")
 
-#new_scales(1.5, 1.5, 10, 10000)
-#new_scales(2.0, 2.0, 10, 10000)
-#new_scales(5.0, 5.0, 10, 10000)
+zCLb_sb15, zCLsb_b15 = new_scales(1.5, 1.5, 10, 10000)
+zCLb_sb20, zCLsb_b20 = new_scales(2.0, 2.0, 10, 10000)
+zCLb_sb50, zCLsb_b50 = new_scales(5.0, 5.0, 10, 10000)
+
+zCLb_list = [zCLb_sb1 ,zCLb_sb15, zCLb_sb20]
+zCLsb_list = [zCLsb_b1 ,zCLsb_b15, zCLsb_b20]
+
+analysis.extrapolate(zCLb_list, "1-CLb")
+analysis.extrapolate(zCLsb_list, "CLsb")
+
 
 ########################################################################
 
 hist_loglik, sf_sig, sf_bkg  = analysis.muFit(1, 100)
 analysis.plot_mu(hist_loglik, sf_sig, sf_bkg)
-
-
-# Last minute function, values in the function are found running new_scales above
-# and manually entered in the extrapolate function in analysis_functions.py...
-c11 = analysis.extrapolate("clb")
-c22 = analysis.extrapolate("clsb")

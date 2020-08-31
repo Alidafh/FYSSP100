@@ -171,6 +171,110 @@ def Significance_Optimization(LumiScale, plot="no"):
 
     return max_exp, bestwidth_exp
 
+def find_fit_parameter(hist, name = "", plot=""):
+    # Given a likelihood function -2logL calculates the minimum and
+    # the 1 sigma uncertainties and returns these.
+    # Input
+    #   hist: the -2lnL histogram
+    #   name: either "bkg" or "sig"
+    #   plot: "plot" if you wish to plot the likelihood function
+    #         "sideband" if you wish to plot the likelihood function for the sideband fit
+    #                    note that this can only be done if rebinN=LumiScale=1 in sideband_fit()
+    # Returns
+    #   numpy array with the fit-parameter, lower unc. and upper unc.
+
+    hist.GetYaxis().SetTitle("-2 ln L")
+    min_bin = hist.GetMinimumBin()
+    min_value = hist.GetBinContent(min_bin)
+    scalefactor = hist.GetBinCenter(min_bin)
+
+    h_deltaL = hist.Clone("hist_rescaled")
+    h_deltaL.Reset()
+
+    for i in range(1, hist.GetNbinsX()+1):
+        cont = min_value - hist.GetBinContent(i)
+        h_deltaL.SetBinContent(i, cont)
+
+    low_bin = h_deltaL.FindFirstBinAbove(-1)-1
+    up_bin = h_deltaL.FindLastBinAbove(-1)+1
+    low_value = hist.GetBinCenter(low_bin)
+    up_value = hist.GetBinCenter(up_bin)
+
+    low = scalefactor - low_value
+    up = up_value - scalefactor
+
+    print("      Optimal {}. scale factor: {:.3f}, with unc.: -{:.3f}, +{:.3f} ".format(name, scalefactor, low, up))
+
+    if plot == "plot":
+        c = ro.TCanvas("c_{}".format(name), "c_{}".format(name), 1000, 600)
+        c.cd()
+        hist.GetYaxis().SetRangeUser(min_value, hist.GetMaximum())
+        hist.Draw("L")
+        c.Draw()
+
+        if name == "bkg":
+            text(0.768, 0.94, "#hat{#alpha} ="+"{:.3f}".format(scalefactor), 0.042)
+            text(0.75, 0.89, "#Delta#hat{#alpha}_{-} ="+"{:.3f}".format(low), 0.042)
+            text(0.75, 0.84, "#Delta#hat{#alpha}_{+}="+"{:.3f}".format(up), 0.042)
+        if name == "sig":
+            text(0.768, 0.94, "#hat{#mu} ="+"{:.3f}".format(scalefactor), 0.042)
+            text(0.75, 0.89, "#Delta#hat{#mu}_{-} ="+"{:.3f}".format(low), 0.042)
+            text(0.75, 0.84, "#Delta#hat{#mu}_{+}="+"{:.3f}".format(up), 0.042)
+        c.Update()
+        Quiet(c.SaveAs)("output/figures/proj_loglik_{}.png".format(name))
+        print("      figure saved in: output/figures/proj_loglik_{}.png".format(name))
+
+    if (plot=="sideband"):
+        c = ro.TCanvas("c{}".format(rebinN), "c", 1000, 600)
+        c.cd()
+        hist.SetAxisRange(1364, 1368, "Y")
+        hist.SetAxisRange(1, 1.25, "X")
+        hist.Draw("L")
+
+        line = ro.TLine(bestalpha, 1364, bestalpha, min_value+1)
+        line.SetLineStyle(7); line.SetLineColor(ro.kGray+2)
+        line.Draw()
+
+        line1 = ro.TLine(1, min_value, 1.25, min_value)
+        line1.SetLineStyle(7); line1.SetLineColor(ro.kGray+2)
+        line1.Draw()
+
+        line2 = ro.TLine(1, min_value+1, 1.25, min_value+1)
+        line2.SetLineStyle(7); line2.SetLineColor(ro.kGray+2)
+        line2.Draw()
+
+        line3 = ro.TLine(low_value, 1364, low_value, min_value+1)
+        line3.SetLineStyle(7); line3.SetLineColor(ro.kGray+2)
+        line3.Draw()
+
+        line4 = ro.TLine(up_value, 1364, up_value, min_value+1)
+        line4.SetLineStyle(7); line4.SetLineColor(ro.kGray+2)
+        line4.Draw()
+
+        arrow1 = ro.TArrow(low_value, min_value+1, bestalpha, min_value+1, 0.01,"<|>")
+        arrow2 = ro.TArrow(bestalpha, min_value+1, up_value, min_value+1, 0.01,"<|>")
+
+        arrow1.Draw()
+        arrow2.Draw()
+
+        text(0.38, 0.4, "#Delta#hat#alpha_{-}", size=0.042)
+        text(0.56, 0.4, "#Delta#hat#alpha_{+}", size=0.042)
+
+        text(0.04, 0.4, "-2lnL_{max} +1", size=0.024)
+        text(0.04, 0.23, "-2lnL_{max}", size=0.024)
+
+        text(0.472, 0.1, "#hat#alpha", size=0.033)
+        text(0.26, 0.1, "#hat{#alpha} - #Delta#hat#alpha_{-}", size=0.033)
+        text(0.65, 0.1, "#hat{#alpha} + #Delta#hat#alpha_{+}", size=0.033)
+
+        c.Update()
+        #c.Draw()
+        Quiet(c.SaveAs)("output/figures/neg_loglikelihood_{}.png".format(rebinN))
+        print("      figure saved in: output/figures/neg_loglikelihood_{}.png".format(rebinN))
+
+    sf_result = np.array([scalefactor, low, up])
+    return sf_result
+
 def sideband_fit(rebinN=1, LumiScale=1):
     #
     # Preforme a likelihood fit to the sidebands, scan the likelihood and find
@@ -209,80 +313,14 @@ def sideband_fit(rebinN=1, LumiScale=1):
         hist_likelihood.SetBinContent(i, logL)
         hist_loglik.SetBinContent(i, -2*logL)
 
-    # Find the maximum likelihood value
-    maximum_bin = hist_likelihood.GetMaximumBin()
-    maximum_value = hist_likelihood.GetBinContent(maximum_bin)
-    bestalpha = hist_likelihood.GetBinCenter(maximum_bin)
+    if rebinN == LumiScale == 1:
+        sf_result = find_fit_parameter(hist_loglik, "bkg", "sideband")
+    else:
+        sf_result = find_fit_parameter(hist_loglik, "bkg")
 
-    minimum_bin = hist_loglik.GetMinimumBin()
-    minimum_value = hist_loglik.GetBinContent(minimum_bin)
-    bestalpha2 = hist_loglik.GetBinCenter(minimum_bin)
-    #print (bestalpha, bestalpha2)
-
-    h_likelihood_rescaled = hist_likelihood.Clone("h_likelihood_rescaled")
-    h_likelihood_rescaled.Reset()
-    h_likelihood_rescaled.SetTitle(";#alpha; ln L - ln L_{max};")
-
-    for i in range(1, nbins+1):
-        content = hist_likelihood.GetBinContent(i) - maximum_value
-        h_likelihood_rescaled.SetBinContent(i, content)
-
-    low_bin = h_likelihood_rescaled.FindFirstBinAbove(-0.5)-1
-    up_bin = h_likelihood_rescaled.FindLastBinAbove(-0.5)+1
-    low_value = hist_likelihood.GetBinCenter(low_bin)
-    up_value = hist_likelihood.GetBinCenter(up_bin)
-
-    low = bestalpha - low_value
-    up = up_value - bestalpha
-
-    print("      Optimal bkg. scale factor: {:.3f}, with unc.: -{:.3f}, +{:.3f} ".format(bestalpha, low, up))
-
-    c = ro.TCanvas("c{}".format(rebinN), "c", 1000, 600)
-    c.cd()
-    hist_loglik.SetAxisRange(1364, 1368, "Y")
-    hist_loglik.SetAxisRange(1, 1.25, "X")
-    hist_loglik.Draw("L")
-
-    line = ro.TLine(bestalpha, 1364, bestalpha, minimum_value+1)
-    line.SetLineStyle(7); line.SetLineColor(ro.kGray+2)
-    line.Draw()
-
-    line1 = ro.TLine(1, minimum_value, 1.25, minimum_value)
-    line1.SetLineStyle(7); line1.SetLineColor(ro.kGray+2)
-    line1.Draw()
-
-    line2 = ro.TLine(1, minimum_value+1, 1.25, minimum_value+1)
-    line2.SetLineStyle(7); line2.SetLineColor(ro.kGray+2)
-    line2.Draw()
-
-    line3 = ro.TLine(low_value, 1364, low_value, minimum_value+1)
-    line3.SetLineStyle(7); line3.SetLineColor(ro.kGray+2)
-    line3.Draw()
-
-    line4 = ro.TLine(up_value, 1364, up_value, minimum_value+1)
-    line4.SetLineStyle(7); line4.SetLineColor(ro.kGray+2)
-    line4.Draw()
-
-    arrow1 = ro.TArrow(low_value, minimum_value+1, bestalpha2, minimum_value+1, 0.01,"<|>")
-    arrow2 = ro.TArrow(bestalpha, minimum_value+1, up_value, minimum_value+1, 0.01,"<|>")
-
-    arrow1.Draw()
-    arrow2.Draw()
-
-    text(0.38, 0.4, "#Delta#hat#alpha_{-}", size=0.042)
-    text(0.56, 0.4, "#Delta#hat#alpha_{+}", size=0.042)
-
-    text(0.04, 0.4, "-2lnL_{max} +1", size=0.024)
-    text(0.04, 0.23, "-2lnL_{max}", size=0.024)
-
-    text(0.472, 0.1, "#hat#alpha", size=0.033)
-    text(0.26, 0.1, "#hat{#alpha} - #Delta#hat#alpha_{-}", size=0.033)
-    text(0.65, 0.1, "#hat{#alpha} + #Delta#hat#alpha_{+}", size=0.033)
-
-    c.Update()
-    #c.Draw()
-    Quiet(c.SaveAs)("output/figures/neg_loglikelihood_{}.png".format(rebinN))
-    print("      figure saved in: output/figures    /neg_loglikelihood_{}.png".format(rebinN))
+    bestalpha = sf_result[0]
+    low = sf_result[1]
+    up = sf_result[2]
 
     return bestalpha, low, up
 
@@ -367,8 +405,9 @@ def Get_TestStatistic_Distribution(ntoys, mode, sf_bkg= 1, sf_sig=1, rebinN=1):
     hist_sb = hist_bkg.Clone("hist_sb")
     hist_sb.Add(hist_signal, 1)
 
-    #h_teststatistic = ro.TH1F("test_statistic_{}".format(mode),"", 300,-90.,90.)
     h_teststatistic = ro.TH1F("test_statistic_{}".format(mode),"", 300,-30.,30.)
+
+    if sf_bkg == 5: h_teststatistic = ro.TH1F("test_statistic_{}".format(mode),"", 300,-90.,90.)
 
     if mode == "bkg":
         hist_template = hist_bkg.Clone("hist_toy")
@@ -464,17 +503,17 @@ def analyze_distributions(h_teststat_bkg, h_teststat_sb, t_data, plot=0):
         if bins_quantiles[1] <= i <= bins_quantiles[3]:
             hist_1sigma.SetBinContent(i, content)
 
-    # Part 5: Find 1-CLb for the distributions
+    # Find 1-CLb for the distributions
     CLb_b = stat.compute_CLb(h_teststat_bkg, median_b)
-    CLb_sb = stat.compute_CLb(h_teststat_bkg, median_sb)
+    CLb_sb = stat.compute_CLb(h_teststat_bkg, median_sb)    #
     CLb_data = stat.compute_CLb(h_teststat_bkg, t_data)
 
     zb_b = ro.Math.gaussian_quantile_c(1.-CLb_b, 1)
     zb_sb = ro.Math.gaussian_quantile_c(1.-CLb_sb, 1)
     zb_data = ro.Math.gaussian_quantile_c(1.-CLb_data, 1)
 
-    # Part 6: Find CLs+b for the distributions
-    CLsb_b = stat.compute_CLsb(h_teststat_sb, median_b)
+    # Find CLs+b for the distributions
+    CLsb_b = stat.compute_CLsb(h_teststat_sb, median_b)     #
     CLsb_sb = stat.compute_CLsb(h_teststat_sb, median_sb)
     CLsb_data = stat.compute_CLsb(h_teststat_sb, t_data)
 
@@ -530,7 +569,7 @@ def analyze_distributions(h_teststat_bkg, h_teststat_sb, t_data, plot=0):
         Quiet(c.SaveAs)("output/figures/distribution_test_statistic_t{}.png".format(int(abs(t_data))))
         print("      figure saved in output/figures/distribution_test_statistic_t{}.png\n".format(int(abs(t_data))))
         c.Draw()
-
+    return zb_sb, zsb_b
 
 def plotMassSideband(rebinN, scale, dscale):
     # Plot the sideband region in the bkg mass spectrum with the scaled
@@ -672,62 +711,38 @@ def signal_fit(alpha, rebinN=1, LumiScale=1):
     Quiet(c.SaveAs)("output/figures/signal_scale_likelihood.png".format(rebinN))
     print("      figure saved in: output/figures/signal_scale_likelihood.png".format(rebinN))
 
+def find_fit_parameter_2d(hist, plot=""):
 
-def find_fit_parameter(hist, name = "", plot=""):
-    # Given a likelihood function -2logL calculates the minimum and
-    # the 1 sigma uncertainties and returns these.
-    # Input
-    #   hist: the -2lnL histogram
-    #   name: either "bkg" or "sig"
-    #   plot: "plot" if you wish to plot the likelihood function
-    # Returns
-    #   numpy array with the fit-parameter, lower unc. and upper unc.
-
-    hist.GetYaxis().SetTitle("-2 ln L")
     min_bin = hist.GetMinimumBin()
-    min_value = hist.GetBinContent(min_bin)
-    scalefactor = hist.GetBinCenter(min_bin)
+    xx, yy, zz = ctypes.c_int(0), ctypes.c_int(0), ctypes.c_int(0)
+    hist.GetBinXYZ(min_bin, xx, yy, zz)
 
-    h_deltaL = hist.Clone("hist_rescaled")
-    h_deltaL.Reset()
+    min_val = hist.GetBinContent(xx.value, yy.value)
+    bestalpha = hist.GetXaxis().GetBinCenter(xx.value)
+    bestmu = hist.GetYaxis().GetBinCenter(yy.value)
 
+    dhist = hist.Clone("new")
     for i in range(1, hist.GetNbinsX()+1):
-        cont = min_value - hist.GetBinContent(i)
-        h_deltaL.SetBinContent(i, cont)
+        for j in range(1, hist.GetNbinsX()+1):
+            dhist.SetBinContent(i, j, min_val - hist.GetBinContent(i, j))
 
-    low_bin = h_deltaL.FindFirstBinAbove(-1)-1
-    up_bin = h_deltaL.FindLastBinAbove(-1)+1
-    low_value = hist.GetBinCenter(low_bin)
-    up_value = hist.GetBinCenter(up_bin)
+    proj_sig = dhist.ProjectionY("dmu")
+    proj_bkg = dhist.ProjectionX("dalpha")
 
-    low = scalefactor - low_value
-    up = up_value - scalefactor
+    co = ro.TCanvas("c0", "c0", 1000, 600)
+    co.Divide(2)
+    co.cd(1)
+    proj_bkg.Draw("L")
+    co.cd(2)
+    proj_sig.Draw("L")
+    co.Draw()
+    #c.Update()
+    Quiet(co.SaveAs)("output/figures/proj_loglik.png")
+    print("      figure saved in: output/figures/proj_loglik_.png")
 
-    print("      Optimal {}. scale factor: {:.2f}, with unc.: -{:.2f}, +{:.2f} ".format(name, scalefactor, low, up))
+    return np.array([bestmu, low1, up1]), np.array([bestalpha, low2, up2])
 
-    if plot == "plot":
-        c = ro.TCanvas("c_{}".format(name), "c_{}".format(name), 1000, 600)
-        c.cd()
-        hist.GetYaxis().SetRangeUser(min_value, hist.GetMaximum())
-        hist.Draw("L")
-        c.Draw()
-
-        if name == "bkg":
-            text(0.768, 0.94, "#hat{#alpha} ="+"{:.3f}".format(scalefactor), 0.042)
-            text(0.75, 0.89, "#Delta#hat{#alpha}_{-} ="+"{:.3f}".format(low), 0.042)
-            text(0.75, 0.84, "#Delta#hat{#alpha}_{+}="+"{:.3f}".format(up), 0.042)
-        if name == "sig":
-            text(0.768, 0.94, "#hat{#mu} ="+"{:.3f}".format(scalefactor), 0.042)
-            text(0.75, 0.89, "#Delta#hat{#mu}_{-} ="+"{:.3f}".format(low), 0.042)
-            text(0.75, 0.84, "#Delta#hat{#mu}_{+}="+"{:.3f}".format(up), 0.042)
-        c.Update()
-        Quiet(c.SaveAs)("output/figures/proj_loglik_{}.png".format(name))
-        print("      figure saved in: output/figures/proj_loglik_{}.png".format(name))
-
-    sf_result = np.array([scalefactor, low, up])
-    return sf_result
-
-def muFit(rebinN, nscale, sf_bkg=1, sf_sig=1):
+def muFit(rebinN, nscale, plot = "", sf_bkg=1, sf_sig=1):
     # Prefomes a likelihood fit to both the signal and bacground scale factor.
     # uses the projections of -2lnL to find the best parameters and their 1 sigma
     # uncertainty. Writes the histograms to file so these can be manipulated/displayed
@@ -738,6 +753,7 @@ def muFit(rebinN, nscale, sf_bkg=1, sf_sig=1):
     #   nscale: number of scalefactors
     #   sf_bkg: scalefactor for the background
     #   sf_sig: scalefactor for the signal
+    #   plot:   plot the countours and the projections
 
     hist_sig = GetMassDistribution(0, sf_sig, rebinN)
     hist_bkg = GetMassDistribution(2, sf_bkg, rebinN)
@@ -768,39 +784,45 @@ def muFit(rebinN, nscale, sf_bkg=1, sf_sig=1):
 
             hist_loglik.SetBinContent(i, j, -2*logL)
 
-    #h_proj_bkg = hist_loglik.ProjectionX("hpX", 1, nscale-2)
-    #h_proj_sig = hist_loglik.ProjectionY("hpY", 1, nscale-2)
+    min_bin = hist_loglik.GetMinimumBin()
+    xx, yy, zz = ctypes.c_int(0), ctypes.c_int(0), ctypes.c_int(0)
+    hist_loglik.GetBinXYZ(min_bin, xx, yy, zz)
+
+    min_val = hist_loglik.GetBinContent(xx.value, yy.value)
+    bestalpha = hist_loglik.GetXaxis().GetBinCenter(xx.value)
+    bestmu = hist_loglik.GetYaxis().GetBinCenter(yy.value)
+
+    print("      Optimal sig. scale factor: {:.3f}".format(bestmu))
+    print("      Optimal bkg. scale factor: {:.3f}".format(bestalpha))
+
+    dhist = hist_loglik.Clone("new")
+
+    for i in range(1, hist_loglik.GetNbinsX()+1):
+        for j in range(1, hist_loglik.GetNbinsX()+1):
+            cont = hist_loglik.GetBinContent(i, j)
+            if cont <=1: dhist.SetBinContent(i, j, 1)
+
+    if plot=="plot":
+        c_par = ro.TCanvas("c_par", "c_par", 1000, 600)
+        c_par.cd()
+        hist_loglik.SetAxisRange(0.9, 1.3, "X")
+        hist_loglik.SetAxisRange(0.2, 2.8, "Y")
+        m = ro.TMarker(bestalpha, bestmu, 20)
+        #hist_loglik.Draw("colz")
+        dhist.Draw("cont3")
+        m.Draw()
+        c_par.Update()
+        Quiet(c_par.SaveAs)("output/figures/countour_fit_parameters_{}.png".format(rebinN))
+        print("      figure saved in: output/figures/countour_fit_parameters_{}.png".format(rebinN))
+
+    print("\nUsing the projections: ")
+    # use projections to try to find some uncertainties
     h_proj_bkg = hist_loglik.ProjectionX("hpX")
     h_proj_sig = hist_loglik.ProjectionY("hpY")
 
     sf_sig = find_fit_parameter(h_proj_sig, "sig", "plot")
     sf_bkg = find_fit_parameter(h_proj_bkg, "bkg", "plot")
-
-    myfile = ro.TFile("output/histograms/loglik_2d_rebinN{}_nscale{}.root".format(rebinN, nscale),"RECREATE")
-    hist_loglik.Write()
-    h_proj_bkg.Write()
-    h_proj_sig.Write()
-    myfile.Close()
-
     return hist_loglik, sf_sig, sf_bkg
-
-def plot_mu(hist_loglik, sf_sig=1, sf_bkg=1):
-    # Plot the -2ln L countours
-    hist_loglik.SetAxisRange(0.9, 1.3, "X")
-    hist_loglik.SetAxisRange(0.2, 2.8, "Y")
-
-    m = ro.TMarker(sf_bkg[0], sf_sig[0], 20)
-    line_mu = ro.TLine(0.85, sf_sig[0], sf_bkg[0], sf_sig[0])
-    line_alpha = ro.TLine(sf_bkg[0], 0, sf_bkg[0], sf_sig[0])
-    #m.SetMarkerColor(ro.kWhite)
-
-    c = ro.TCanvas("c", "c", 1000, 600)
-    c.cd()
-    hist_loglik.Draw("colz")
-    m.Draw()
-    c.Update()
-    Quiet(c.SaveAs)("output/figures/fit_parameters.png")
-    print("      figure saved in: output/figures/fit_parameters.png")
 
 def lumi_scale(ntoys, rebinN = 1):
     # Scan over different luminosities and calculate the CLb value
@@ -840,17 +862,14 @@ def lumi_scale(ntoys, rebinN = 1):
     myfile.Close()
     print ("histogram saved in output/histograms/clb_toys{}_bin{}.root".format(ntoys, rebinN))
 
-def extrapolate(type):
-
+def extrapolate(CL_list, type):
+    # Takes three points and extrapolates
     # make graph
-    if type == "clb":
-        lumi, z_clb = array('d', [1.0, 1.5, 2.0]), array( 'd', [2.45, 2.85, 3.35])
-        axis = "Expected 1-CL_{b} [n#sigma]"
-    if type == "clsb":
-        lumi, z_clb = array('d', [1.0, 1.5, 2.0]), array( 'd', [2.06, 2.45, 2.85])
-        axis = "Expected CL_{sb} [n#sigma]"
+    print("Extrapolating using 3 points:")
+    lumi, z_cl = array('d', [1.0, 1.5, 2.0]), array( 'd', CL_list)
+    axis = "Expected {}".format(type)
 
-    gr_lumi_sign = ro.TGraph(3, lumi, z_clb)
+    gr_lumi_sign = ro.TGraph(3, lumi, z_cl)
 
     fit = ro.TF1("fit", "pol1", 1, 6)
     gr_lumi_sign.Fit("fit", "Q0")
@@ -859,6 +878,19 @@ def extrapolate(type):
 
     hist_fit = ro.TH1F("h_sb", "", 100, 0, 6)
     hist_fit.Eval(func)
+
+    lumi5 = 0
+    z_val5 = 0
+    for i in range(1, hist_fit.GetNbinsX()+1):
+        z_val = hist_fit.GetBinContent(i)
+        lumi = hist_fit.GetBinCenter(i)
+        if z_val >= 5.0:
+            lumi5 = lumi
+            z_val5 = z_val
+            break
+
+    print("      {:.2f} sigma reached at {:.2f} x luminosity".format(z_val, lumi))
+
     hist_fit.SetLineStyle(7)
     hist_fit.SetLineColor(ro.kGray)
     hist_fit.GetXaxis().SetTitle("Luminosity scale")
@@ -882,27 +914,23 @@ def extrapolate(type):
     c.Update()
 
     Quiet(c.SaveAs)("output/figures/extrapolation_{}.png".format(type))
-    print("      figure saved in: output/figures/extrapolation_{}.png".format(type))
-    return c
+    print("      figure saved in: output/figures/extrapolation_{}.png\n".format(type))
+    #return c
 
 
 
 if __name__ == "__main__":
     #lumi_scale(100, 10)
-    c11 = extrapolate("clb")
-    c22 = extrapolate("clsb")
+    #c11 = extrapolate("clb")
+    #c22 = extrapolate("clsb")
+    #sideband_fit(rebinN=1, LumiScale=1)
+    #CL_list = [2.06, 2.45, 2.85]
+    #extrapolate(CL_list, "1-CLb")
+    muFit(10, 10)
 
-    """
-    f = ro.TFile("output/histograms/loglik_2d_rebinN10_nscale200.root", "READ")
-    h_proj_bkg = f.Get("hpX").Clone("h_proj_bkg")
-    h_proj_bkg.SetDirectory(0)
-    h_proj_sig = f.Get("hpY").Clone("h_proj_sig")
-    h_proj_sig.SetDirectory(0)
-    hist_loglik = f.Get("loglik").Clone("h_loglik")
-    hist_loglik.SetDirectory(0)
-    f.Close()
+    #f = ro.TFile("output/histograms/loglik_2d_rebinN10_nscale100.root", "READ")
+    #hist_loglik = f.Get("loglik").Clone("h_loglik")
+    #hist_loglik.SetDirectory(0)
+    #f.Close()
 
-    sf_bkg = find_fit_parameter(h_proj_bkg, "bkg")
-    sf_sig = find_fit_parameter(h_proj_sig, "sig")
-    """
-    #plot_mu(hist_loglik, sf_sig, sf_bkg)
+    #find_fit_parameter_2d(hist_loglik, "plot")
