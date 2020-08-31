@@ -16,7 +16,7 @@ style->SetPadColor(icol);
 style->SetStatColor(icol);
 style->SetPaperSize(20,26);
 style->SetPadTopMargin(0.05);
-style->SetPadRightMargin(0.05);
+style->SetPadRightMargin(0.10);
 style->SetPadBottomMargin(0.16);
 style->SetPadLeftMargin(0.16);
 style->SetTitleXOffset(1.4);
@@ -47,6 +47,7 @@ style->SetEndErrorSize(0.);
 style->SetOptTitle(0);
 style->SetOptStat(0);
 style->SetOptFit(0);
+style->SetPalette(75);
 //style->SetBorderSize(0)
 //style->SetPadTickX(1);
 //style->SetPadTickY(1);
