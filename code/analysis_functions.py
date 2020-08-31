@@ -2,8 +2,11 @@ import ROOT as ro
 import numpy as np
 from statistics import IntegratePoisson, IntegrateFromRight
 import statistics as stat
+import ctypes
+from array import array
 
 def Quiet(func,level = ro.kInfo + 1):
+    # Stops ROOT from printing when preforming tasks such as saving images
     def qfunc(*args,**kwargs):
         oldlevel = ro.gErrorIgnoreLevel
         ro.gErrorIgnoreLevel = level
@@ -14,25 +17,29 @@ def Quiet(func,level = ro.kInfo + 1):
     return qfunc
 
 def text(x, y, text_string, size=0.022):
+    # Draw text in the plots
     t = ro.TLatex()
     t.SetNDC(1)
     t.SetTextAlign(13);
     t.SetTextSize(size);
     t.SetTextFont(42);
     t.DrawLatex(x, y, text_string)
-    #t.Draw("same")
 
-def GetMassDistribution(type, scaleFactor = 1):
-    """
-    Returns the scaled histogram from file.
-        type: 0 = Higgs125, 1 = Higgs200, 2 = ZZ SM background, 3 = data
-        scaleFactor: 1 if no scaling is neccesary
-    """
+def GetMassDistribution(type, scaleFactor = 1, rebinN=1):
+    # Returns the scaled histogram from file "Histograms_fake.root"
+    # type: 0 = Higgs125,
+    #       1 = Higgs200,
+    #       2 = ZZ SM background,
+    #       3 = data
+    # scaleFactor: 1 if no scaling is neccesary
+
     ro.TH1.AddDirectory(ro.kFALSE)
     histograms = ["h_m4l_Higgs125_fake", "h_m4l_Higgs200_fake", "h_m4l_ZZ_fake", "h_m4l_data_fake"]
     infile = ro.TFile("input/Histograms_fake.root", "READ")
     h_mass = infile.Get(histograms[type]).Clone("h_mass")
-    h_mass.SetTitle("; m_{4l} GeV"+";Events/ {:.1f}".format(h_mass.GetBinWidth(1)))
+    #h_mass.Sumw2()
+    h_mass.Rebin(rebinN)
+    h_mass.SetTitle("; m_{4l} [GeV]"+";Events/ {:.1f} [GeV]".format(h_mass.GetBinWidth(1)))
     nbins = h_mass.GetNbinsX()
     for i in range(nbins):
         bin_cont = h_mass.GetBinContent(i)
@@ -41,143 +48,158 @@ def GetMassDistribution(type, scaleFactor = 1):
     return h_mass
 
 def MassPlot(rebinN):
-	"""
-	plots the mass distribution
-	rebin: rebin histograms for better plotting
-	"""
-	print("Plotting the invariant mass distribution with rebin = {:.2f}".format(rebinN))
-	hist_signal = GetMassDistribution(0)
-	hist_bkg = GetMassDistribution(2)
-	hist_data = GetMassDistribution(3)
+    # Make a plot of the mass distribution
+    # rebiN: rebin histograms for nicer plotting
 
-	# Rebin histograms
-	hist_signal.Rebin(rebinN)
-	hist_bkg.Rebin(rebinN)
-	hist_data.Rebin(rebinN)
+    print("Plotting the invariant mass distribution with rebin = {:.2f}".format(rebinN))
+    hist_signal = GetMassDistribution(0)
+    hist_bkg = GetMassDistribution(2)
+    hist_data = GetMassDistribution(3)
 
-	# make signal+bkg histogram
-	hist_sb = hist_bkg.Clone("hist_sb")
-	hist_sb.Add(hist_signal)
-
-	hist_sb.SetFillColor(7)
-	hist_sb.SetAxisRange(0, 22, "Y")
-	hist_sb.SetAxisRange(0,400, "X")
-	hist_bkg.SetFillColor(2)
-
-	legend = ro.TLegend(0.75, 0.75, 0.90, 0.85)
-	legend.AddEntry(hist_sb, "Higgs signal", "f")
-	legend.AddEntry(hist_bkg, "Background", "f")
-	legend.AddEntry(hist_data, "Data", "p")
-
-	sr1 = ro.TLine(150, 0, 150, 20)
-	sr1.SetLineStyle(7)
-
-	asr1 = ro.TArrow(150, 12, 170, 12, 0.01, "-|>")
-
-	c = ro.TCanvas("c", "c", 1000, 600)
-	hist_sb.Draw("hist")
-	hist_sb.GetYaxis().SetTitle("Events/ {:.1f} GeV".format(hist_sb.GetBinWidth(1)))
-	hist_bkg.Draw("same")
-	hist_data.Draw("e same")
-	sr1.Draw()
-	asr1.Draw()
-	text(0.38, 0.65, "Sideband", size=0.022)
-	text(0.385, 0.63, "Region", size=0.022)
-	legend.Draw()
-
-	c.Update()
-	Quiet(c.SaveAs)("output/figures/mass_plot_125_{}.png".format(rebinN))
-	print("      figure saved in: output/figures/mass_plot_125_{}.png\n".format(rebinN))
-
-def Significance_Optimization(LumiScale, plot="no"):
-	"""
-	Finds the mass window that gives the highest expected significance
-		LumiScale - If you want to scale the luminosity,
-		plot="no" - If a figure is desired, do plot="plot"
-	"""
-	# Get histograms
-	if plot != "no": print("For a Luminosity scale: {:.1f}".format(LumiScale))
-	hist_signal = GetMassDistribution(0, LumiScale)
-	hist_bkg = GetMassDistribution(2, LumiScale)
-	hist_data = GetMassDistribution(3, LumiScale)
-
-	hist_window = ro.TH1D("h_masswindow", ";m_{4l} GeV; ",250,0.,25.); # make a mass window - full width between 0 and 25 GeV
-	hist_window_exp = ro.TH1D("h_masswindow_expected",";width [GeV]; Significance Z",250,0.,25.);
-	hist_window_obs = ro.TH1D("h_masswindow_observed",";width [GeV]; Significance Z",250,0.,25.);
-
-	nbins = hist_window.GetNbinsX()
-	for i in range(nbins):
-		window_width = hist_window.GetBinCenter(i)
-		#print("Trying mass window: {:.2f}\n".format(window_width))
-		x1 = 125-0.5*window_width
-		x2 = 125+0.5*window_width
-		ndata = hist_data.Integral(hist_data.FindBin(x1), hist_data.FindBin(x2))
-		nbkg  = hist_bkg.Integral(hist_bkg.FindBin(x1), hist_bkg.FindBin(x2))
-		nsig  = hist_signal.Integral(hist_signal.FindBin(x1), hist_signal.FindBin(x2))
-
-		if( (nbkg+nsig)<1 ): continue
-
-		#Calculating the expected significance
-		exp_p = 1 - IntegratePoisson(nsig+nbkg, nbkg)
-		exp_z = ro.Math.normal_quantile_c(exp_p, 1)
-		hist_window_exp.SetBinContent(i, exp_z)
-
-		# Calculating observed significance
-		obs_p = 1 - IntegratePoisson(ndata, nbkg)
-		obs_z = ro.Math.normal_quantile_c(obs_p, 1)
-		hist_window_obs.SetBinContent(i, obs_z)
-
-	if plot=="plot":
-		# plot the results and save figure
-		c = ro.TCanvas("c{}".format(LumiScale), "c", 1000, 600)
-		#legend = ro.TLegend(0.75, 0.75, 0.90, 0.85)
-		legend = ro.TLegend(0.75, 0.79, 0.93, 0.93)
-		legend.AddEntry(hist_window_exp, "Expected", "l")
-		hist_window_obs.SetLineColor(1)
-		hist_window_exp.SetLineColor(4)
-
-		if( abs(LumiScale-1.00) < 0.01 ):
-		    hist_window_obs.Draw("L same")
-		    legend.AddEntry(hist_window_obs, "Observed", "l")
-
-		hist_window_exp.Draw("L same")
-		legend.Draw()
-		c.Update()
-		Quiet(c.SaveAs)("output/figures/expected_mass_window_{}.png".format(LumiScale))
-		print("      figure saved in: output/figures/expected_mass_window_{}.png".format(LumiScale))
-
-	# Find the mass window that maximises the significance:
-	max_exp = hist_window_exp.GetMaximum()
-	bin_exp = hist_window_exp.GetMaximumBin()
-	bestwidth_exp = hist_window_exp.GetXaxis().GetBinCenter(bin_exp)
-
-	max_obs = hist_window_obs.GetMaximum()
-	bin_obs = hist_window_obs.GetMaximumBin()
-	bestwidth_obs = hist_window_obs.GetXaxis().GetBinCenter(bin_obs)
-
-	if plot != "no" :print("      maximum expected significance: {:.2f} at mass window {:.2f}".format(max_exp, bestwidth_exp))
-	if plot != "no" :print("      maximum observed significance: {:.2f} at mass window {:.2f}\n".format(max_obs, bestwidth_obs))
-
-	return max_exp, bestwidth_exp
-
-def sideband_fit(rebinN=1, LumiScale=1):
-    #Sideband fit
-    hist_bkg = GetMassDistribution(2, LumiScale)
-    hist_data = GetMassDistribution(3, LumiScale)
-
+    # Rebin histograms
+    hist_signal.Rebin(rebinN)
     hist_bkg.Rebin(rebinN)
     hist_data.Rebin(rebinN)
 
+    # make signal+bkg histogram
+    hist_sb = hist_bkg.Clone("hist_sb")
+    hist_sb.Add(hist_signal)
+
+    hist_sb.SetFillColor(7)
+    hist_sb.SetAxisRange(0, 22, "Y")
+    hist_sb.SetAxisRange(0,400, "X")
+    hist_bkg.SetFillColor(2)
+
+    legend = ro.TLegend(0.75, 0.75, 0.90, 0.85)
+    legend.AddEntry(hist_sb, "Higgs signal", "f")
+    legend.AddEntry(hist_bkg, "Background", "f")
+    legend.AddEntry(hist_data, "Data", "p")
+
+    sr1 = ro.TLine(150, 0, 150, 20)
+    sr1.SetLineStyle(7)
+
+    asr1 = ro.TArrow(150, 12, 170, 12, 0.01, "-|>")
+
+    c = ro.TCanvas("c", "c", 1000, 600)
+    hist_sb.Draw("hist")
+    hist_sb.GetYaxis().SetTitle("Events/ {:.1f} GeV".format(hist_sb.GetBinWidth(1)))
+    hist_bkg.Draw("same")
+    hist_data.Draw("e same")
+    sr1.Draw()
+    asr1.Draw()
+    text(0.38, 0.65, "Sideband", size=0.022)
+    text(0.385, 0.63, "Region", size=0.022)
+    legend.Draw()
+
+    c.Update()
+    Quiet(c.SaveAs)("output/figures/mass_plot_125_{}.png".format(rebinN))
+    print("      figure saved in: output/figures/mass_plot_125_{}.png\n".format(rebinN))
+
+def Significance_Optimization(LumiScale, plot="no"):
+    #
+    # Searches for the mass window width that optimises the expected significance
+    #   LumiScale - If you want to scale the luminosity,
+    #   plot="no" - If a figure is desired, do plot="plot"
+    #
+    # Returns the maximum expected significance and the corresponding window width
+    #   max_exp, bestwidth_exp
+
+    if plot != "no": print("For a Luminosity scale: {:.1f}".format(LumiScale))
+
+    hist_signal = GetMassDistribution(0, LumiScale)
+    hist_bkg = GetMassDistribution(2, LumiScale)
+    hist_data = GetMassDistribution(3, LumiScale)
+
+    hist_window = ro.TH1D("h_masswindow", ";m_{4l} GeV; ",250,0.,25.); # make a mass window - full width between 0 and 25 GeV
+    hist_window_exp = ro.TH1D("h_masswindow_expected",";width [GeV]; Significance Z",250,0.,25.);
+    hist_window_obs = ro.TH1D("h_masswindow_observed",";width [GeV]; Significance Z",250,0.,25.);
+
+    nbins = hist_window.GetNbinsX()
+    for i in range(nbins):
+        window_width = hist_window.GetBinCenter(i)
+
+        x1 = 125-0.5*window_width
+        x2 = 125+0.5*window_width
+        ndata = hist_data.Integral(hist_data.FindBin(x1), hist_data.FindBin(x2))
+        nbkg  = hist_bkg.Integral(hist_bkg.FindBin(x1), hist_bkg.FindBin(x2))
+        nsig  = hist_signal.Integral(hist_signal.FindBin(x1), hist_signal.FindBin(x2))
+
+        if( (nbkg+nsig)<1 ): continue
+
+        #Calculating the expected significance
+        exp_p = 1 - IntegratePoisson(nsig+nbkg, nbkg)
+        exp_z = ro.Math.normal_quantile_c(exp_p, 1)
+        hist_window_exp.SetBinContent(i, exp_z)
+
+        # Calculating observed significance
+        obs_p = 1 - IntegratePoisson(ndata, nbkg)
+        obs_z = ro.Math.normal_quantile_c(obs_p, 1)
+        hist_window_obs.SetBinContent(i, obs_z)
+
+    if plot=="plot":
+        # plot the results and save figure
+        c = ro.TCanvas("c{}".format(LumiScale), "c", 1000, 600)
+
+        legend = ro.TLegend(0.75, 0.79, 0.9, 0.93)
+        legend.AddEntry(hist_window_exp, "Expected", "l")
+
+        hist_window_obs.SetLineColor(1)
+        hist_window_exp.SetLineColor(4)
+
+        if( abs(LumiScale-1.00) < 0.01 ):
+            # Draw the observed luminosity
+            hist_window_obs.Draw("L same")
+            legend.AddEntry(hist_window_obs, "Observed", "l")
+
+        hist_window_exp.Draw("L same")
+        legend.Draw()
+        c.Update()
+        Quiet(c.SaveAs)("output/figures/expected_mass_window_{}.png".format(LumiScale))
+        print("      figure saved in: output/figures/expected_mass_window_{}.png".format(LumiScale))
+
+    # Find the mass window that maximises the expected significance
+    max_exp = hist_window_exp.GetMaximum()
+    bin_exp = hist_window_exp.GetMaximumBin()
+    bestwidth_exp = hist_window_exp.GetXaxis().GetBinCenter(bin_exp)
+
+    max_obs = hist_window_obs.GetMaximum()
+    bin_obs = hist_window_obs.GetMaximumBin()
+    bestwidth_obs = hist_window_obs.GetXaxis().GetBinCenter(bin_obs)
+
+    if plot != "no" :print("      maximum expected significance: {:.2f} at mass window {:.2f}".format(max_exp, bestwidth_exp))
+    if plot != "no" :print("      maximum observed significance: {:.2f} at mass window {:.2f}\n".format(max_obs, bestwidth_obs))
+
+    return max_exp, bestwidth_exp
+
+def sideband_fit(rebinN=1, LumiScale=1):
+    #
+    # Preforme a likelihood fit to the sidebands, scan the likelihood and find
+    # the best parameter for the background and its uncertainties. Also makes a
+    # plot of the negative log likelihood as a function of nuicence parameter.
+    #
+    # Input
+    #   rebinN: rebin the histogram (rebinN)
+    #   LumiScale: scale the luminosity
+    # Returns
+    #   bestalpha: The fit parameter that minimises -2lnL,
+    #   low: the negative error,
+    #   up: the positive error
+
+    hist_bkg = GetMassDistribution(2, LumiScale, rebinN)
+    hist_data = GetMassDistribution(3, LumiScale, rebinN)
+
     nbins = hist_data.GetNbinsX()
-    scale_bkg = ro.TH1F("scale_bkg", ";#alpha; ln L", nbins, 0.1, 3.1)
-    hist_likelihood = ro.TH1F("likelihood", ";#alpha; ln L", nbins, 0.1, 3.1)
+    scale_bkg = ro.TH1F("scale_bkg", ";bkg. scale, #alpha; ln L", nbins, 0.1, 3.1)
+    hist_likelihood = ro.TH1F("like", ";bkg. scale, #alpha; ln L", nbins, 0.1, 3.1)
+    hist_loglik = ro.TH1F("loglik", ";bkg. scale, #alpha; -2ln L", nbins, 0.1, 3.1)
 
     print("Preforming sideband fit:")
     for i in range(1, nbins+1):
-        # Loop over scale factors
+    # Loop over scale factors
         alpha = scale_bkg.GetBinCenter(i)
         logL = 0.
         for j in range(1, nbins+1):
+            # Loop over bins
             mass = hist_data.GetBinCenter(j)
             n = hist_data.GetBinContent(j)
             if (mass >= 150. and mass <= 400.):
@@ -185,13 +207,18 @@ def sideband_fit(rebinN=1, LumiScale=1):
                 logL += np.log(ro.TMath.Poisson(n,func))
 
         hist_likelihood.SetBinContent(i, logL)
+        hist_loglik.SetBinContent(i, -2*logL)
 
     # Find the maximum likelihood value
     maximum_bin = hist_likelihood.GetMaximumBin()
     maximum_value = hist_likelihood.GetBinContent(maximum_bin)
     bestalpha = hist_likelihood.GetBinCenter(maximum_bin)
 
-    # rescale the likelihood function
+    minimum_bin = hist_loglik.GetMinimumBin()
+    minimum_value = hist_loglik.GetBinContent(minimum_bin)
+    bestalpha2 = hist_loglik.GetBinCenter(minimum_bin)
+    #print (bestalpha, bestalpha2)
+
     h_likelihood_rescaled = hist_likelihood.Clone("h_likelihood_rescaled")
     h_likelihood_rescaled.Reset()
     h_likelihood_rescaled.SetTitle(";#alpha; ln L - ln L_{max};")
@@ -208,48 +235,71 @@ def sideband_fit(rebinN=1, LumiScale=1):
     low = bestalpha - low_value
     up = up_value - bestalpha
 
-    print("      Optimal bkg. scale factor: {:.2f}, with unc.: -{:.2f}, +{:.2f} ".format(bestalpha, low, up))
+    print("      Optimal bkg. scale factor: {:.3f}, with unc.: -{:.3f}, +{:.3f} ".format(bestalpha, low, up))
 
-    if rebinN==1:
-        c = ro.TCanvas("c{}".format(rebinN), "c", 1000, 600)
-        c.cd()
-        h_likelihood_rescaled.SetAxisRange(-1, 0, "Y")
-        h_likelihood_rescaled.SetAxisRange(1, 1.25, "X")
-        h_likelihood_rescaled.Draw("L")
+    c = ro.TCanvas("c{}".format(rebinN), "c", 1000, 600)
+    c.cd()
+    hist_loglik.SetAxisRange(1364, 1368, "Y")
+    hist_loglik.SetAxisRange(1, 1.25, "X")
+    hist_loglik.Draw("L")
 
-        line = ro.TLine(bestalpha, 0, bestalpha, -1)
-        line.SetLineStyle(7); line.SetLineColor(ro.kGray+2)
-        line.Draw()
+    line = ro.TLine(bestalpha, 1364, bestalpha, minimum_value+1)
+    line.SetLineStyle(7); line.SetLineColor(ro.kGray+2)
+    line.Draw()
 
-        line2 = ro.TLine(low_value, -0.5, low_value, -1)
-        line2.SetLineStyle(7); line2.SetLineColor(ro.kGray+2)
-        line2.Draw()
+    line1 = ro.TLine(1, minimum_value, 1.25, minimum_value)
+    line1.SetLineStyle(7); line1.SetLineColor(ro.kGray+2)
+    line1.Draw()
 
-        line3 = ro.TLine(up_value, -0.5, up_value, -1)
-        line3.SetLineStyle(7); line3.SetLineColor(ro.kGray+2)
-        line3.Draw()
+    line2 = ro.TLine(1, minimum_value+1, 1.25, minimum_value+1)
+    line2.SetLineStyle(7); line2.SetLineColor(ro.kGray+2)
+    line2.Draw()
 
-    # arrows showing the error
-        arrow1 = ro.TArrow(low_value, -0.5, bestalpha, -0.5, 0.01,"<|>")
-        arrow2 = ro.TArrow(bestalpha, -0.5, up_value, -0.5, 0.01,"<|>")
-        text(0.38, 0.6, "#Delta#hat#alpha_{-}", size=0.042)
-        text(0.56, 0.6, "#Delta#hat#alpha_{+}", size=0.042)
-        arrow1.Draw()
-        arrow2.Draw()
+    line3 = ro.TLine(low_value, 1364, low_value, minimum_value+1)
+    line3.SetLineStyle(7); line3.SetLineColor(ro.kGray+2)
+    line3.Draw()
 
-        c.Update()
-        Quiet(c.SaveAs)("output/figures/delta_log_likelihood.png".format(rebinN))
-        print("      figure saved in: output/figures/delta_log_likelihood.png".format(rebinN))
+    line4 = ro.TLine(up_value, 1364, up_value, minimum_value+1)
+    line4.SetLineStyle(7); line4.SetLineColor(ro.kGray+2)
+    line4.Draw()
+
+    arrow1 = ro.TArrow(low_value, minimum_value+1, bestalpha2, minimum_value+1, 0.01,"<|>")
+    arrow2 = ro.TArrow(bestalpha, minimum_value+1, up_value, minimum_value+1, 0.01,"<|>")
+
+    arrow1.Draw()
+    arrow2.Draw()
+
+    text(0.38, 0.4, "#Delta#hat#alpha_{-}", size=0.042)
+    text(0.56, 0.4, "#Delta#hat#alpha_{+}", size=0.042)
+
+    text(0.04, 0.4, "-2lnL_{max} +1", size=0.024)
+    text(0.04, 0.23, "-2lnL_{max}", size=0.024)
+
+    text(0.472, 0.1, "#hat#alpha", size=0.033)
+    text(0.26, 0.1, "#hat{#alpha} - #Delta#hat#alpha_{-}", size=0.033)
+    text(0.65, 0.1, "#hat{#alpha} + #Delta#hat#alpha_{+}", size=0.033)
+
+    c.Update()
+    #c.Draw()
+    Quiet(c.SaveAs)("output/figures/neg_loglikelihood_{}.png".format(rebinN))
+    print("      figure saved in: output/figures    /neg_loglikelihood_{}.png".format(rebinN))
 
     return bestalpha, low, up
+
+def count_events(hist, signal_width, mass = 125.):
+    lower_mass_bin = hist.FindBin(mass - 0.5*(signal_width))
+    upper_mass_bin = hist.FindBin(mass + 0.5*(signal_width))
+    nevents = hist.Integral(lower_mass_bin, upper_mass_bin)
+    return nevents
 
 def ExpectedSignificance_ToyMC(b, s, db, Ntoys):
     ro.gROOT.Clear()
     ro.gROOT.Delete()
 
+    print("Calculating the expected significance using {:.2e} toys:".format(Ntoys))
     # Histograms for number of events
-    h_Nbkg = ro.TH1D("h_Nbkg", "Number of background events", 500, -0.5, 499.5);
-    h_Nsig_plus_bgr = ro.TH1D("h_Nsig_plus_bgr", "Number of signal + background events", 500, -0.5, 499.5);
+    h_Nbkg = ro.TH1D("h_bkg", "Number of background events", 500, -0.5, 499.5);
+    h_Nsig_plus_bgr = ro.TH1D("h_sig_bgr", "Number of signal + background events", 500, -0.5, 499.5);
 
     random = ro.TRandom3(0)
 
@@ -264,33 +314,19 @@ def ExpectedSignificance_ToyMC(b, s, db, Ntoys):
             h_Nbkg.Fill(b_toy)
             h_Nsig_plus_bgr.Fill(splusb_toy)
 
-        else:
-            print("\n  ExpectedSignificance_ToyMC::ERROR\n")
-            print("      The mean of b of s+b is smaller than 0 -> disregarding toy\n")
-            print("      Note ; could also have used log_normal distribution rather than truncated Gaussian\n")
-
     nEvents_median = s+b
     pvalue = IntegrateFromRight(h_Nbkg, nEvents_median)
-    sigma = ro.Math.gaussian_quantile_c(pvalue,1)
+    #sigma = ro.Math.gaussian_quantile_c(pvalue,1)
 
-    print("      p-value = {:.3f}, sigificance = {:.3f}".format(pvalue, sigma))
+    #print("      p-value = {:.3f}, sigificance = {:.3f}".format(pvalue, sigma))
     return pvalue
-
-def count_events(nr):
-    hist_sig = GetMassDistribution(nr)
-    w = 7.15
-    low = hist_sig.FindBin(125-0.5*w)
-    up = hist_sig.FindBin(125+0.5*w)
-    mean = hist_sig.Integral(low, up)
-    print("nuber of events", mean)
-    return mean
 
 def Get_TestStatistic(h_mass_dataset, h_template_bkg, h_template_sig):
     #   Computes the likelihood ratio test-statistic for a dataset:
-	#	(h_mass_dataset)
+    #    (h_mass_dataset)
     #   from expected distributions for background and signal:
-	#	(h_template_bkg, h_template_sig)
-	#
+    #    (h_template_bkg, h_template_sig)
+    #
     #   Returns the test statistic: X
 
     n = h_mass_dataset.GetNbinsX()
@@ -305,7 +341,6 @@ def Get_TestStatistic(h_mass_dataset, h_template_bkg, h_template_sig):
         loglikelihood_b += np.log(ro.TMath.Poisson(data, bkg))
 
     X = -2*loglikelihood_sb - (-2*loglikelihood_b)
-    #print(X)
     return X
 
 def GenerateToyDataSet(h_mass_template):
@@ -325,14 +360,26 @@ def GenerateToyDataSet(h_mass_template):
 
     return h_mass_toydataset
 
-def Get_TestStatistic_Distribution(hist_template, ntoys, mode):
+def Get_TestStatistic_Distribution(ntoys, mode, sf_bkg= 1, sf_sig=1, rebinN=1):
     # makes test-statistic distribution
-    hist_signal = GetMassDistribution(0)
-    hist_bkg = GetMassDistribution(2)
+    hist_signal = GetMassDistribution(0, sf_sig, rebinN)
+    hist_bkg = GetMassDistribution(2, sf_bkg, rebinN)
+    hist_sb = hist_bkg.Clone("hist_sb")
+    hist_sb.Add(hist_signal, 1)
 
+    #h_teststatistic = ro.TH1F("test_statistic_{}".format(mode),"", 300,-90.,90.)
     h_teststatistic = ro.TH1F("test_statistic_{}".format(mode),"", 300,-30.,30.)
+
+    if mode == "bkg":
+        hist_template = hist_bkg.Clone("hist_toy")
+        print("Generating distribution for b-only hypothesis")
+    if mode == "sb":
+        hist_template = hist_sb.Clone("hist_toy")
+        print("Generating distribution for s+b hypothesis")
+
     for i in range(ntoys):
         if i%1000==0: print("calculating ... ({:}/{:})".format(i,ntoys))
+        #if i%500==0: print("calculating ... ({:}/{:})".format(i,ntoys))
         hist_toy = GenerateToyDataSet(hist_template)
         X = Get_TestStatistic(hist_toy, hist_bkg, hist_signal) #number
         h_teststatistic.Fill(X)
@@ -340,7 +387,13 @@ def Get_TestStatistic_Distribution(hist_template, ntoys, mode):
     return h_teststatistic
 
 def Quantiles(hist, type=0):
-    # From federico, must fix
+    # Finds the median an the 1 and 2 sigma quantiles for the t-distribution.
+    # Input
+    #   hist: t-dist for the hypothesis
+    #   type: option to print the values.
+    # Returns
+    #   numpy array with the quantiles (-2,-1,median,1,2)
+
     frac_1sigma = ro.Math.gaussian_cdf(-1.,1.,0.)
     frac_2sigma = ro.Math.gaussian_cdf(-2.,1.,0.)
     probs = np.array( [frac_2sigma, frac_1sigma, 0.5, 1-frac_1sigma, 1-frac_2sigma] )
@@ -363,117 +416,490 @@ def Quantiles(hist, type=0):
 
     return Xvalues_out
 
-def Generate_toys():
-# Part 3 and 4
-    hist_data = GetMassDistribution(3)
-    hist_signal = GetMassDistribution(0)
-    hist_bkg = GetMassDistribution(2)
-    hist_sb = hist_bkg.Clone("hist_sb")
-    hist_sb.Add(hist_signal, 1)
+def Generate_toys(ntoys, sf_bkg= 1, sf_sig=1, rebinN=1):
+    # Calls on the Get_TestStatistic_Distribution function to generate the
+    # test-statistic distributions and writes the histograms to file so
+    # we do not have to do this again every time the program is edited.
+    #
+    # TODO: Clean up, this is a very messy way to do this
 
-    # Monte carlo simulation for test-statistic distributions
-    ntoys = 10000
-    print("Generating test-statistic distribution for background-only hypothesis")
-    hist_distribution_b = Get_TestStatistic_Distribution(hist_bkg, ntoys, "bkg")
+    hist_distribution_b = Get_TestStatistic_Distribution(ntoys, "bkg", sf_bkg, sf_sig, rebinN)
+    hist_distribution_sb = Get_TestStatistic_Distribution(ntoys, "sb", sf_bkg, sf_sig, rebinN)
 
-    print("Generating test-statistic distribution for signal+background hypothesis")
-    hist_distribution_sb = Get_TestStatistic_Distribution(hist_sb, ntoys, "sb")
-
-    myfile = ro.TFile("output/histograms/test_statistic_distribution.root","RECREATE")
+    #Write the historams to file
+    myfile = ro.TFile("output/histograms/test_statistic_distribution_sfb{}_sfs{}_toys{}_bin{}.root".format(sf_bkg, sf_sig, ntoys, rebinN),"RECREATE")
     hist_distribution_b.Write()
     hist_distribution_sb.Write()
-    #hist_distribution_data.Write()
     myfile.Close()
 
+
 def analyze_distributions(h_teststat_bkg, h_teststat_sb, t_data, plot=0):
-	# Get the quantiles and print
-	quant_b = Quantiles(h_teststat_bkg, "b-only")
-	quant_sb = Quantiles(h_teststat_sb, "s+b")
+    # Calculates the CLb, CLsb and CLs values using the test-statistic
+    # distributions for bkg and singal and the test statistic from data,
+    # and prints a summary.
+    # Input:
+    #   h_teststat_bkg: t-distribution for the null hypothesis
+    #   h_teststat_sb:  t-distribution for the alterative hypothesis
+    #   t_data: the value of the test statistic for the data
+    #   plot="plot" if you want to plot the test-statistic distributions.
+    #
+    #  TODO: this function could calculate the test-statistic for the data
 
-	#histograms for the 1 and 2 sigma indications
-	hist_1sigma = h_teststat_bkg.Clone("hist_1sigma"); hist_1sigma.Reset()
-	hist_2sigma = h_teststat_bkg.Clone("hist_2sigma"); hist_2sigma.Reset()
+    quant_b = Quantiles(h_teststat_bkg, "b-only")
+    quant_sb = Quantiles(h_teststat_sb, "s+b")
 
-	bins_quantiles = [h_teststat_bkg.FindBin(elm) for elm in quant_b]
+    median_b = quant_b[2]
+    median_sb = quant_sb[2]
 
-	for i in range(h_teststat_bkg.GetNbinsX()):
-		content = h_teststat_bkg.GetBinContent(i)
-		if bins_quantiles[0] <= i <= bins_quantiles[4]:
-			hist_2sigma.SetBinContent(i, content)
-		if bins_quantiles[1] <= i <= bins_quantiles[3]:
-			hist_1sigma.SetBinContent(i, content)
+    #histograms for the 1 and 2 sigma indications
+    hist_1sigma = h_teststat_bkg.Clone("hist_1sigma"); hist_1sigma.Reset()
+    hist_2sigma = h_teststat_bkg.Clone("hist_2sigma"); hist_2sigma.Reset()
 
-	# Part 5: Find 1-CLb for the distributions
-	CLb_b = stat.IntegrateFromRight(h_teststat_bkg, quant_b[2])
-	CLb_sb = stat.IntegrateFromRight(h_teststat_bkg, quant_sb[2])
-	CLb_data = stat.IntegrateFromRight(h_teststat_bkg, t_data)
+    bins_quantiles = [h_teststat_bkg.FindBin(elm) for elm in quant_b]
 
-	zb_b = ro.Math.gaussian_quantile_c(1.-CLb_b, 1)
-	zb_sb = ro.Math.gaussian_quantile_c(1.-CLb_sb, 1)
-	zb_data = ro.Math.gaussian_quantile_c(1.-CLb_data, 1)
+    for i in range(h_teststat_bkg.GetNbinsX()):
+        content = h_teststat_bkg.GetBinContent(i)
+        if bins_quantiles[0] <= i <= bins_quantiles[4]:
+            hist_2sigma.SetBinContent(i, content)
+        if bins_quantiles[1] <= i <= bins_quantiles[3]:
+            hist_1sigma.SetBinContent(i, content)
 
-	# Part 6: Find CLs+b for the distributions
-	CLsb_b = stat.IntegrateFromRight(h_teststat_sb, quant_b[2])
-	CLsb_sb = stat.IntegrateFromRight(h_teststat_sb, quant_sb[2])
-	CLsb_data = stat.IntegrateFromRight(h_teststat_sb, t_data)
+    # Part 5: Find 1-CLb for the distributions
+    CLb_b = stat.compute_CLb(h_teststat_bkg, median_b)
+    CLb_sb = stat.compute_CLb(h_teststat_bkg, median_sb)
+    CLb_data = stat.compute_CLb(h_teststat_bkg, t_data)
 
-	median_b = quant_b[2]
-	median_sb = quant_sb[2]
-	# Print a summary:
-	print("        Median     Median     Median ")
-	print("        b-only      s+b        data")
-	print("t:     {:.2e}  {:.2e}  {:.2e}".format(median_b, median_sb, t_data))
-	print("1-CLb: {:.2e}   {:.2e}   {:.2e}".format(1-CLb_b, 1-CLb_sb, 1-CLb_data))
-	print("      ({:.6f}) ({:.6f}) ({:.6f})".format(zb_b, zb_sb, zb_data))
-	print("CLs+b: {:.2e}   {:.2e}   {:.2e}".format(CLsb_b, CLsb_sb, CLsb_data))
-	print("CLs:   {:.2e}   {:.2e}   {:.2e}".format(CLsb_b/CLb_b, CLsb_sb/CLb_sb, CLsb_data/CLb_data))
+    zb_b = ro.Math.gaussian_quantile_c(1.-CLb_b, 1)
+    zb_sb = ro.Math.gaussian_quantile_c(1.-CLb_sb, 1)
+    zb_data = ro.Math.gaussian_quantile_c(1.-CLb_data, 1)
 
-	if plot == "plot":
-		print("\nPlotting the test-statistic distributions:")
-		c = ro.TCanvas("c", "c", 1000, 600)
+    # Part 6: Find CLs+b for the distributions
+    CLsb_b = stat.compute_CLsb(h_teststat_sb, median_b)
+    CLsb_sb = stat.compute_CLsb(h_teststat_sb, median_sb)
+    CLsb_data = stat.compute_CLsb(h_teststat_sb, t_data)
 
-		h_teststat_sb.SetLineColor(ro.kRed)
-		h_teststat_sb.SetTitle(";t=-2ln(Q); number of pseudo-experiments")
-		h_teststat_bkg.SetLineColor(ro.kBlack)
-		h_teststat_bkg.SetTitle(";t=-2ln(Q); number of pseudo-experiments")
-		hist_1sigma.SetFillColor(ro.kGreen)
-		hist_2sigma.SetFillColor(ro.kYellow)
+    zsb_b = ro.Math.gaussian_quantile_c(CLsb_b, 1)
+    zsb_sb = ro.Math.gaussian_quantile_c(CLsb_sb, 1)
+    zsb_data = ro.Math.gaussian_quantile_c(CLsb_data, 1)
 
-		arrow = ro.TArrow(t_data, 2, t_data, 200, 0.01,"<|")
-		legend = ro.TLegend(0.75, 0.79, 0.93, 0.93)
-		legend.AddEntry(h_teststat_bkg, "b-only", "l")
-		legend.AddEntry(h_teststat_sb, "s+b", "l")
-		legend.AddEntry(hist_1sigma, "1#sigma", "f")
-		legend.AddEntry(hist_2sigma, "2#sigma", "f")
+    CLs_b = CLsb_b/(CLb_b)
+    CLs_sb = CLsb_sb/(CLb_sb)
+    CLs_data = CLsb_data/(CLb_data)
 
-		h_teststat_bkg.Draw("hist")
-		hist_2sigma.Draw("same hist")
-		hist_1sigma.Draw("same hist")
-		h_teststat_sb.Draw("same hist")
-		arrow.Draw()
-		legend.Draw()
-		text(0.39, 0.83, "data", 0.033)
-		c.Update()
-		Quiet(c.SaveAs)("output/figures/distribution_test_statistic.png")
-		print("      figure saved in output/figures/distribution_test_statistic.png\n")
-		c.Draw()
-	#return c
+    # Print a summary:
+    print("        Median     Median     Median ")
+    print("        b-only      s+b        data")
+    print("t:     {:.5f}  {:.5f}  {:.5f}".format(median_b, median_sb, t_data))
+    print("1-CLb: {:.5f}   {:.5f}   {:.5f}".format(1-CLb_b, 1-CLb_sb, 1-CLb_data))
+    print("      ({:.6f}) ({:.6f}) ({:.6f})".format(zb_b, zb_sb, zb_data))
+    print("CLs+b: {:.5f}   {:.5f}   {:.5f}".format(CLsb_b, CLsb_sb, CLsb_data))
+    print("      ({:.6f}) ({:.6f}) ({:.6f})".format(zsb_b, zsb_sb, zsb_data))
+    print("CLs:   {:.5f}   {:.5f}   {:.5f}".format(CLs_b, CLs_sb, CLs_data))
+
+    if plot == "plot":
+        print("\nPlotting the test-statistic distributions:")
+        c = ro.TCanvas("c", "c", 1000, 600)
+
+        h_teststat_sb.SetLineColor(ro.kRed)
+        h_teststat_sb.SetTitle(";t=-2ln(Q); number of pseudo-experiments")
+        h_teststat_bkg.SetLineColor(ro.kBlack)
+        h_teststat_bkg.SetTitle(";t=-2ln(Q); number of pseudo-experiments")
+        hist_1sigma.SetFillColor(ro.kGreen)
+        hist_2sigma.SetFillColor(ro.kYellow)
+
+        arrow = ro.TArrow(t_data, 2, t_data, 200, 0.01,"<|")
+        legend = ro.TLegend(0.75, 0.79, 0.90, 0.93)
+        legend.AddEntry(h_teststat_bkg, "b-only", "l")
+        legend.AddEntry(h_teststat_sb, "s+b", "l")
+        legend.AddEntry(hist_1sigma, "1#sigma", "f")
+        legend.AddEntry(hist_2sigma, "2#sigma", "f")
+
+        #h_teststat_bkg.SetAxisRange(-30,30,"X")
+        #h_teststat_sb.SetAxisRange(-30,30,"X")
+        #hist_2sigma.SetAxisRange(-30,30,"X")
+        #hist_1sigma.SetAxisRange(-30,30,"X")
+
+        h_teststat_bkg.Draw("hist")
+        hist_2sigma.Draw("same hist")
+        hist_1sigma.Draw("same hist")
+        h_teststat_sb.Draw("same hist")
+        #arrow.Draw()
+        legend.Draw()
+        #text(0.39, 0.83, "data", 0.033)
+        c.Update()
+        Quiet(c.SaveAs)("output/figures/distribution_test_statistic_t{}.png".format(int(abs(t_data))))
+        print("      figure saved in output/figures/distribution_test_statistic_t{}.png\n".format(int(abs(t_data))))
+        c.Draw()
+
+
+def plotMassSideband(rebinN, scale, dscale):
+    # Plot the sideband region in the bkg mass spectrum with the scaled
+    # bkg. distribution and the datapoints
+    # Input
+    #   rebinN: rebin factor for prettier plotting
+    #   scale: the scale factor
+    #   dscale: error in the scalefactor
+    #
+    # TODO: fix the error stuff in this function
+
+    print("\nPlotting side band region:")
+    hist_data = GetMassDistribution(3, 1, rebinN)
+    hist_bkg = GetMassDistribution(2, 1, rebinN)
+
+    hist_scaled_bkg = GetMassDistribution(2, scale, rebinN)
+    hist_scaled_bkg.SetFillColor(2)
+    hist_scaled_bkg.SetLineColor(2)
+
+    hist_bkg.SetFillColor(0)
+    hist_bkg.SetLineColor(1)
+    #hist_bkg.SetFillStyle(3004)
+    """
+    # Set the errors on the histograms
+    for i in range(hist_scaled_bkg.GetNbinsX()):
+        db = hist_bkg.GetBinError(i)
+        if b != 0:
+            scaled_b, d_scaled_b = stat.multiplication_error(scale, b, dscale, db)
+            hist_scaled_bkg.SetBinError(i, d_scaled_b)
+    """
+    hist_bkg.SetAxisRange(150, 400, "X")
+    hist_data.SetAxisRange(150, 400, "X")
+    hist_scaled_bkg.SetAxisRange(150, 400, "X")
+
+    hist_error_band = hist_scaled_bkg.Clone("new")
+    hist_error_band.SetFillColor(1)
+    hist_error_band.SetLineColor(0)
+    hist_error_band.SetFillStyle(3004)
+    hist_error_band.SetMarkerColor(0)
+    hist_error_band.SetMarkerStyle(0)
+
+    legend = ro.TLegend(0.65, 0.75, 0.93, 0.93)
+    legend.AddEntry(hist_bkg, "Unscaled Background", "l")
+    legend.AddEntry(hist_scaled_bkg, "Scaled Background (scale={:.2f})".format(scale), "f")
+    #legend.AddEntry(hist_error_band, "unc. on scaled bkg", "f")
+    legend.AddEntry(hist_data, "Data", "p")
+
+    c = ro.TCanvas("c", "c", 1000, 600)
+    hist_data.Draw("e")
+    hist_scaled_bkg.Draw("hist same")
+    #hist_error_band.Draw("E3 same")
+    hist_bkg.Draw("hist same")
+    hist_data.Draw("e same")
+    legend.Draw()
+    c.Draw()
+    c.Update()
+    Quiet(c.SaveAs)("output/figures/sideband_scaled.png")
+    print("      figure saved in: output/figures/sideband_scaled.png\n")
+
+def signal_fit(alpha, rebinN=1, LumiScale=1):
+    # Do a fit to find the signal scale factor, the bacground parameter is set to 1
+    #
+    # TODO: Not actually used in the analysis. fix.
+
+    hist_sig = GetMassDistribution(0, LumiScale)
+    hist_bkg = GetMassDistribution(2, LumiScale)
+    hist_data = GetMassDistribution(3, LumiScale)
+
+    hist_sig.Rebin(rebinN)
+    hist_bkg.Rebin(rebinN)
+    hist_data.Rebin(rebinN)
+
+    nbins = hist_data.GetNbinsX()
+
+    scale_sig = ro.TH1F("scale_sig", "", nbins, 0.1, 3.1)
+
+    hist_lik_sig = ro.TH1F("Lsig", ";sig. scale, #mu; -2#Delta ln L", nbins, 0.1, 3.1)
+    hist_likelihood = ro.TH1F("Lsig2", ";#mu; -2#Delta ln L", nbins, 0.1, 3.1)
+
+    print("Preforming likelihood fit in signal region:")
+    for i in range(1, nbins+1):
+        # Loop over scale factors
+        mu = scale_sig.GetBinCenter(i)
+
+        logL = 0.
+        for j in range(1, nbins+1):
+            mass = hist_data.GetBinCenter(j)
+            n = hist_data.GetBinContent(j)
+            b = hist_bkg.GetBinContent(j)
+            s = hist_sig.GetBinContent(j)
+
+            func = mu*s + alpha*b
+            logL += np.log(ro.TMath.Poisson(n, func))
+
+            #if (mass >= 121 and mass <= 129):
+            #    func = mu*s + alpha*b
+            #    logL += np.log(ro.TMath.Poisson(n, func))
+
+        hist_lik_sig.SetBinContent(i, -2*logL)
+        hist_likelihood.SetBinContent(i, logL)
+
+    # Find the minimum
+    min_bin = hist_lik_sig.GetMinimumBin()
+    min_val = hist_lik_sig.GetBinContent(min_bin)
+    bestmu = hist_lik_sig.GetBinCenter(min_bin)
+
+    #print(bestmu)
+
+    # Find the maximum likelihood value
+    maximum_bin = hist_likelihood.GetMaximumBin()
+    maximum_value = hist_likelihood.GetBinContent(maximum_bin)
+    bestmu2 = hist_likelihood.GetBinCenter(maximum_bin)
+
+    #print(bestmu2)
+
+    # rescale the likelihood function
+    h_likelihood_rescaled = hist_likelihood.Clone("h_likelihood_rescaled")
+    h_likelihood_rescaled.Reset()
+    h_likelihood_rescaled.SetTitle(";#alpha; ln L - ln L_{max};")
+
+    for i in range(1, nbins+1):
+        content = hist_likelihood.GetBinContent(i) - maximum_value
+        h_likelihood_rescaled.SetBinContent(i, content)
+
+    low_bin = h_likelihood_rescaled.FindFirstBinAbove(-0.5)-1
+    up_bin = h_likelihood_rescaled.FindLastBinAbove(-0.5)+1
+    low_value = hist_likelihood.GetBinCenter(low_bin)
+    up_value = hist_likelihood.GetBinCenter(up_bin)
+
+    low = bestmu - low_value
+    up = up_value - bestmu
+
+    print("      Optimal sig. scale factor: {:.3f}, with unc.: -{:.3f}, +{:.3f}".format(bestmu, low, up))
+
+    c = ro.TCanvas("s", "s", 1000, 600)
+    hist_lik_sig.Draw("l")
+    #h_likelihood_rescaled.Draw("l")
+    c.Draw()
+    Quiet(c.SaveAs)("output/figures/signal_scale_likelihood.png".format(rebinN))
+    print("      figure saved in: output/figures/signal_scale_likelihood.png".format(rebinN))
+
+
+def find_fit_parameter(hist, name = "", plot=""):
+    # Given a likelihood function -2logL calculates the minimum and
+    # the 1 sigma uncertainties and returns these.
+    # Input
+    #   hist: the -2lnL histogram
+    #   name: either "bkg" or "sig"
+    #   plot: "plot" if you wish to plot the likelihood function
+    # Returns
+    #   numpy array with the fit-parameter, lower unc. and upper unc.
+
+    hist.GetYaxis().SetTitle("-2 ln L")
+    min_bin = hist.GetMinimumBin()
+    min_value = hist.GetBinContent(min_bin)
+    scalefactor = hist.GetBinCenter(min_bin)
+
+    h_deltaL = hist.Clone("hist_rescaled")
+    h_deltaL.Reset()
+
+    for i in range(1, hist.GetNbinsX()+1):
+        cont = min_value - hist.GetBinContent(i)
+        h_deltaL.SetBinContent(i, cont)
+
+    low_bin = h_deltaL.FindFirstBinAbove(-1)-1
+    up_bin = h_deltaL.FindLastBinAbove(-1)+1
+    low_value = hist.GetBinCenter(low_bin)
+    up_value = hist.GetBinCenter(up_bin)
+
+    low = scalefactor - low_value
+    up = up_value - scalefactor
+
+    print("      Optimal {}. scale factor: {:.2f}, with unc.: -{:.2f}, +{:.2f} ".format(name, scalefactor, low, up))
+
+    if plot == "plot":
+        c = ro.TCanvas("c_{}".format(name), "c_{}".format(name), 1000, 600)
+        c.cd()
+        hist.GetYaxis().SetRangeUser(min_value, hist.GetMaximum())
+        hist.Draw("L")
+        c.Draw()
+
+        if name == "bkg":
+            text(0.768, 0.94, "#hat{#alpha} ="+"{:.3f}".format(scalefactor), 0.042)
+            text(0.75, 0.89, "#Delta#hat{#alpha}_{-} ="+"{:.3f}".format(low), 0.042)
+            text(0.75, 0.84, "#Delta#hat{#alpha}_{+}="+"{:.3f}".format(up), 0.042)
+        if name == "sig":
+            text(0.768, 0.94, "#hat{#mu} ="+"{:.3f}".format(scalefactor), 0.042)
+            text(0.75, 0.89, "#Delta#hat{#mu}_{-} ="+"{:.3f}".format(low), 0.042)
+            text(0.75, 0.84, "#Delta#hat{#mu}_{+}="+"{:.3f}".format(up), 0.042)
+        c.Update()
+        Quiet(c.SaveAs)("output/figures/proj_loglik_{}.png".format(name))
+        print("      figure saved in: output/figures/proj_loglik_{}.png".format(name))
+
+    sf_result = np.array([scalefactor, low, up])
+    return sf_result
+
+def muFit(rebinN, nscale, sf_bkg=1, sf_sig=1):
+    # Prefomes a likelihood fit to both the signal and bacground scale factor.
+    # uses the projections of -2lnL to find the best parameters and their 1 sigma
+    # uncertainty. Writes the histograms to file so these can be manipulated/displayed
+    # without having to do the fit again. (takes some time)
+    #
+    # Input
+    #   rebinN: rebin histogram
+    #   nscale: number of scalefactors
+    #   sf_bkg: scalefactor for the background
+    #   sf_sig: scalefactor for the signal
+
+    hist_sig = GetMassDistribution(0, sf_sig, rebinN)
+    hist_bkg = GetMassDistribution(2, sf_bkg, rebinN)
+    hist_data = GetMassDistribution(3, 1, rebinN)
+
+    nbins = hist_data.GetNbinsX()
+    hist_scalefactors = ro.TH2D("scale",";bkg. scale, #alpha; sig.scale, #mu; -2lnL", nscale, 0.1, 3.1, nscale, 0.1, 3.1)
+
+    hist_loglik = hist_scalefactors.Clone("loglik")
+    hist_loglik.Reset()
+
+    print("\nPreforming likelihood fit for both parameters:")
+    for i in range(1, hist_scalefactors.GetNbinsX()+1):
+        for j in range(1, hist_scalefactors.GetNbinsX()+1):
+            # Loops over scalefactors
+            alpha = hist_scalefactors.GetXaxis().GetBinCenter(i)
+            mu = hist_scalefactors.GetYaxis().GetBinCenter(j)
+
+            logL = 0.
+            for k in range(1, nbins+1):
+                # loop over bins in datasets
+                n = hist_data.GetBinContent(k)
+                b = hist_bkg.GetBinContent(k)
+                s = hist_sig.GetBinContent(k)
+
+                func = mu*s + alpha*b
+                logL += np.log(ro.TMath.Poisson(n, func))
+
+            hist_loglik.SetBinContent(i, j, -2*logL)
+
+    #h_proj_bkg = hist_loglik.ProjectionX("hpX", 1, nscale-2)
+    #h_proj_sig = hist_loglik.ProjectionY("hpY", 1, nscale-2)
+    h_proj_bkg = hist_loglik.ProjectionX("hpX")
+    h_proj_sig = hist_loglik.ProjectionY("hpY")
+
+    sf_sig = find_fit_parameter(h_proj_sig, "sig", "plot")
+    sf_bkg = find_fit_parameter(h_proj_bkg, "bkg", "plot")
+
+    myfile = ro.TFile("output/histograms/loglik_2d_rebinN{}_nscale{}.root".format(rebinN, nscale),"RECREATE")
+    hist_loglik.Write()
+    h_proj_bkg.Write()
+    h_proj_sig.Write()
+    myfile.Close()
+
+    return hist_loglik, sf_sig, sf_bkg
+
+def plot_mu(hist_loglik, sf_sig=1, sf_bkg=1):
+    # Plot the -2ln L countours
+    hist_loglik.SetAxisRange(0.9, 1.3, "X")
+    hist_loglik.SetAxisRange(0.2, 2.8, "Y")
+
+    m = ro.TMarker(sf_bkg[0], sf_sig[0], 20)
+    line_mu = ro.TLine(0.85, sf_sig[0], sf_bkg[0], sf_sig[0])
+    line_alpha = ro.TLine(sf_bkg[0], 0, sf_bkg[0], sf_sig[0])
+    #m.SetMarkerColor(ro.kWhite)
+
+    c = ro.TCanvas("c", "c", 1000, 600)
+    c.cd()
+    hist_loglik.Draw("colz")
+    m.Draw()
+    c.Update()
+    Quiet(c.SaveAs)("output/figures/fit_parameters.png")
+    print("      figure saved in: output/figures/fit_parameters.png")
+
+def lumi_scale(ntoys, rebinN = 1):
+    # Scan over different luminosities and calculate the CLb value
+    hist_lumi = ro.TH1D("lumi", "", 10, 0, 10)
+
+    for i in range(1, hist_lumi.GetNbinsX()+1):
+        LumiScale = hist_lumi.GetBinCenter(i)
+        sf_bkg = LumiScale
+        sf_sig = LumiScale
+        print("Calculating for luminosity scale:", LumiScale)
+
+        # Get test-stat for bkg
+        hist_t_bkg = Get_TestStatistic_Distribution(ntoys, "bkg", sf_bkg, sf_sig, rebinN)
+        median_bkg = Quantiles(hist_t_bkg)[2]
+
+        #test-stat for sb
+        hist_t_sb = Get_TestStatistic_Distribution(ntoys, "sb", sf_bkg, sf_sig,rebinN)
+        median_sb = Quantiles(hist_t_sb)[2]
+
+        # 1-CLb
+        CLb_sb = 1 - stat.compute_CLb(hist_t_bkg, median_sb)
+        if (CLb_sb) < 1e-9: CLb_sb = 1e-9
+
+        significance = ro.Math.gaussian_quantile_c(CLb_sb, 1)
+        print("\n      median bkg:{:.4f},   median sb: {:.4f}".format(median_bkg, median_sb))
+        print("      expected CLb is {:.4f} ({:.4f})\n".format(1-CLb_sb, significance))
+
+        hist_lumi.SetBinContent(i, significance)
+
+    c = ro.TCanvas("c", "c", 1000, 600)
+    c.cd()
+    hist_lumi.Draw("P*")
+    c.Draw()
+
+    myfile = ro.TFile("output/histograms/clb_toys{}_bin{}.root".format(ntoys, rebinN),"RECREATE")
+    hist_lumi.Write()
+    myfile.Close()
+    print ("histogram saved in output/histograms/clb_toys{}_bin{}.root".format(ntoys, rebinN))
+
+def extrapolate(type):
+
+    # make graph
+    if type == "clb":
+        lumi, z_clb = array('d', [1.0, 1.5, 2.0]), array( 'd', [2.45, 2.85, 3.35])
+        axis = "Expected 1-CL_{b} [n#sigma]"
+    if type == "clsb":
+        lumi, z_clb = array('d', [1.0, 1.5, 2.0]), array( 'd', [2.06, 2.45, 2.85])
+        axis = "Expected CL_{sb} [n#sigma]"
+
+    gr_lumi_sign = ro.TGraph(3, lumi, z_clb)
+
+    fit = ro.TF1("fit", "pol1", 1, 10)
+    gr_lumi_sign.Fit("fit", "Q0")
+    func = gr_lumi_sign.GetFunction("fit")
+    parameters = [func.GetParameter(i) for i in range(2)]
+
+    hist_fit = ro.TH1F("h_sb", "", 100, 0, 10)
+    hist_fit.Eval(func)
+    hist_fit.SetLineStyle(7)
+    hist_fit.SetLineColor(ro.kGray)
+    hist_fit.GetXaxis().SetTitle("Luminosity scale")
+    hist_fit.GetYaxis().SetTitle(axis)
+
+    max = ro.TLine(0, 5, 10, 5)
+    max.SetLineStyle(7)
+    max.SetLineColor(ro.kRed)
+
+    legend = ro.TLegend(0.20, 0.75, 0.6, 0.85)
+    legend.AddEntry(hist_fit, "Extrapolation from points", "l")
+    legend.AddEntry(gr_lumi_sign, "expected significance using 10^{4} toys")
+    legend.AddEntry(max, "the famous 5#sigma limit")
+
+    c = ro.TCanvas("c{}".format(type), "cc", 1000, 600)
+    hist_fit.Draw("L")
+    gr_lumi_sign.Draw("P")
+    max.Draw()
+    legend.Draw()
+    c.Draw()
+    c.Update()
+
+    Quiet(c.SaveAs)("output/figures/extrapolation_{}.png".format(type))
+    print("      figure saved in: output/figures/extrapolation_{}.png".format(type))
+    return c
+
+
 
 if __name__ == "__main__":
-	#s = count_events(0)
-	#b = 5.134
-	#db = 0.305
-	#s = 5.96
-	#b = 7.10
-	#db = 0.41
-	#Ntoys = 1e6
-	#p = ExpectedSignificance_ToyMC(b, s, db ,Ntoys)
-	#hist_data = GetMassDistribution(3)
-	hist_signal = GetMassDistribution(0)
-	MassPlot(20)
-	#hist_bkg = GetMassDistribution(2)
+    #lumi_scale(100, 10)
+    """
+    f = ro.TFile("output/histograms/loglik_2d_rebinN10_nscale200.root", "READ")
+    h_proj_bkg = f.Get("hpX").Clone("h_proj_bkg")
+    h_proj_bkg.SetDirectory(0)
+    h_proj_sig = f.Get("hpY").Clone("h_proj_sig")
+    h_proj_sig.SetDirectory(0)
+    hist_loglik = f.Get("loglik").Clone("h_loglik")
+    hist_loglik.SetDirectory(0)
+    f.Close()
 
-	#xx = Get_TestStatistic(hist_data, hist_bkg, hist_signal)
-
-	#hist_test = GenerateToyDataSet(hist_signal)
-	# print("TestStatistics = ",higgs.GetTestStatistics(h_data, h_bgd, h_sig))
+    sf_bkg = find_fit_parameter(h_proj_bkg, "bkg")
+    sf_sig = find_fit_parameter(h_proj_sig, "sig")
+    """
+    #plot_mu(hist_loglik, sf_sig, sf_bkg)
