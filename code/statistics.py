@@ -50,8 +50,7 @@ def multiplication_error(a, b, da, db):
     z = a*b
     var = (z**2)*((da/a)**2 + (db/b)**2)
     std = np.sqrt(var)
-    return var, std
-
+    return z, std
 
 def IntegrateFromRight(h_X_bgr, X_value):
     # calculates p-value
