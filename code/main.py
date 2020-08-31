@@ -49,12 +49,7 @@ quit()
 
 ################################################################################
 # Preform sideband fit to find bkg-scale factor
-if int(sys.argv[1]) != 0: bestalpha, sigmalow, sigmaup = analysis.sideband_fit()
-
-if int(sys.argv[1]) == 0:
-	bestalpha = 1.11
-	sigmalow = 0.06
-	sigmaup = 0.07
+bestalpha, sigmalow, sigmaup = analysis.sideband_fit()
 
 # Plot the scaled sideband region for comparison
 analysis.plotMassSideband(20, bestalpha, 0.10)
@@ -120,8 +115,8 @@ print("      t = {:.3f}\n".format(t_data))
 
 ###############################################################################
 # Execute toy generator before moving on, if this is already calculated there
-# is no need to do it again. Just comment out the line below.
-#ntoys, sf_bkg= 1, sf_sig=1, rebinN=1)
+# is no need to do it again.
+#(ntoys, sf_bkg= 1, sf_sig=1, rebinN=1)
 
 if int(sys.argv[1]) != 0:
     analysis.Generate_toys(10000, 1, 1, 1)
@@ -152,7 +147,7 @@ def new_scales(sfb, sfs, rebinN, ntoys):
     t_obs_scaled = analysis.Get_TestStatistic(hist_dat_scaled, hist_bkg_scaled, hist_sig_scaled)
     print("      t = {:.3f}\n".format(t_obs_scaled))
 
-    #analysis.Generate_toys(ntoys, sfb, sfs, rebinN)
+    analysis.Generate_toys(ntoys, sfb, sfs, rebinN)
 
     histograms = ["test_statistic_bkg", "test_statistic_sb"]
     infile1 = ro.TFile("output/histograms/test_statistic_distribution_sfb{}_sfs{}_toys{}_bin{}.root".format(sfb, sfs, ntoys,rebinN), "READ")
@@ -164,16 +159,17 @@ def new_scales(sfb, sfs, rebinN, ntoys):
 
     print(" ")
 
-
-
 #new_scales(1.5, 1.5, 10, 10000)
 #new_scales(2.0, 2.0, 10, 10000)
 #new_scales(5.0, 5.0, 10, 10000)
+
 ########################################################################
-#analysis.signal_fit(bestalpha, 1, 1)
 
 hist_loglik, sf_sig, sf_bkg  = analysis.muFit(1, 100)
 analysis.plot_mu(hist_loglik, sf_sig, sf_bkg)
 
+
+# Last minute function, values in the function are found running new_scales above
+# and manually entered in the extrapolate function in analysis_functions.py...
 c11 = analysis.extrapolate("clb")
 c22 = analysis.extrapolate("clsb")

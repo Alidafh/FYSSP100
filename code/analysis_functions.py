@@ -852,23 +852,23 @@ def extrapolate(type):
 
     gr_lumi_sign = ro.TGraph(3, lumi, z_clb)
 
-    fit = ro.TF1("fit", "pol1", 1, 10)
+    fit = ro.TF1("fit", "pol1", 1, 6)
     gr_lumi_sign.Fit("fit", "Q0")
     func = gr_lumi_sign.GetFunction("fit")
     parameters = [func.GetParameter(i) for i in range(2)]
 
-    hist_fit = ro.TH1F("h_sb", "", 100, 0, 10)
+    hist_fit = ro.TH1F("h_sb", "", 100, 0, 6)
     hist_fit.Eval(func)
     hist_fit.SetLineStyle(7)
     hist_fit.SetLineColor(ro.kGray)
     hist_fit.GetXaxis().SetTitle("Luminosity scale")
     hist_fit.GetYaxis().SetTitle(axis)
-
-    max = ro.TLine(0, 5, 10, 5)
+    hist_fit.SetAxisRange(0,6,"Y")
+    max = ro.TLine(0, 5, 6, 5)
     max.SetLineStyle(7)
     max.SetLineColor(ro.kRed)
 
-    legend = ro.TLegend(0.20, 0.75, 0.6, 0.85)
+    legend = ro.TLegend(0.40, 0.25, 0.85, 0.5)
     legend.AddEntry(hist_fit, "Extrapolation from points", "l")
     legend.AddEntry(gr_lumi_sign, "expected significance using 10^{4} toys")
     legend.AddEntry(max, "the famous 5#sigma limit")
@@ -889,6 +889,9 @@ def extrapolate(type):
 
 if __name__ == "__main__":
     #lumi_scale(100, 10)
+    c11 = extrapolate("clb")
+    c22 = extrapolate("clsb")
+
     """
     f = ro.TFile("output/histograms/loglik_2d_rebinN10_nscale200.root", "READ")
     h_proj_bkg = f.Get("hpX").Clone("h_proj_bkg")
