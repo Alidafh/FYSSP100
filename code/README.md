@@ -1,5 +1,7 @@
 ## Methods in analysis_functions.py :
 
+Open 'analysis_functions.py' and make sure the path to the input root file is correct on line 38
+
 To run the code use:
   source run.sh
 
