@@ -10,12 +10,21 @@ if [ ! -d output/histograms ]; then
   echo "created output/histograms"
 fi
 
-echo "for quick run type 0"
+FILE=output/histograms/test_statistic_distribution_sfb1_sfs1_toys10000_bin1.root
+
+if [ -f "$FILE" ]; then
+  echo "$FILE exists"
+  echo "To use this type 0:"
+
+else
+  python main.py 1
+fi
 
 read type
 
 if [ $type -eq 0 ]; then
-   echo "quick run started"
+   echo "Quick run started"
    python main.py 0
-
+else
+  python main.py 1
 fi

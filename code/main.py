@@ -4,6 +4,7 @@ import statistics as stat
 import numpy as np
 import analysis_functions as analysis
 import sys, os
+import matplotlib.pyplot as plt
 ro.gROOT.SetBatch(ro.kTRUE)
 
 
@@ -12,62 +13,104 @@ ro.gROOT.SetBatch(ro.kTRUE)
 analysis.MassPlot(20)
 #analysis.MassPlot(10)
 
-# a), b) Mass window that optimizes the expected and observed significance and figure.
-max_exp1, bestwidth_exp1 = analysis.Significance_Optimization(LumiScale=1, plot="plot")
+# Mass window that optimizes the expected and observed significance
+exp_significance, signal_width = analysis.Significance_Optimization(LumiScale=1, plot="plot")
 
-# c) Mass window that optimizes the expected and observed significance for 5 times Luminosity
-max_exp2, bestwidth_exp2 = analysis.Significance_Optimization(LumiScale=5, plot="plot")
+# for 5 times the luminosity
+exp_significance_lumi5, width_lumi5 = analysis.Significance_Optimization(LumiScale=5, plot="plot")
 
-# d) Luminosity for discovery
+
 print("Finding the lowest Luminosity required for discovery")
 best_width = 0
 best_lumi = 0
 LumiScales = np.linspace(0, 10, 50)
+z_array = np.zeros(50)
 for i in range(len(LumiScales)):
-    sign, width = analysis.Significance_Optimization(LumiScales[i])
-    if sign >= 5:
-        print("      Expected significance: {:.2f} at width {:.2f} and luminosity {:.2f}\n".format(sign, width, LumiScales[i]))
+	# Loop over luminosity scale factors
+    significance, width = analysis.Significance_Optimization(LumiScales[i])
+    z_array[i] = significance
+    if significance >= 5:
+        print("      Expected significance: {:.2f} at width {:.2f} and luminosity {:.2f}\n".format(significance, width, LumiScales[i]))
         best_width = width
         best_lumi = LumiScales[i]
         break
 
+"""
+plt.figure(1)
+plt.plot(LumiScales, z_array)
+plt.xlabel("Luminosity scale factro")
+plt.ylabel("Significance, Z")
+plt.show()
+quit()
+"""
+
+# Plot this.
+#exp_significance_lumiX, width_lumiX = analysis.Significance_Optimization(best_lumi, "plot")
 
 ################################################################################
-# Part 2
+# Preform sideband fit to find bkg-scale factor
+if int(sys.argv[1]) != 0: bestalpha, sigmalow, sigmaup = analysis.sideband_fit()
 
-# Preform sideband fit to find alpha and uncertainties
-#bestalpha, sigmalow, sigmaup = analysis.sideband_fit()
+if int(sys.argv[1]) == 0:
+	bestalpha = 1.11
+	sigmalow = 0.06
+	sigmaup = 0.07
 
-# Takes time to do sideband_fit, so nubers are entered here for the time being
-bestalpha = 1.11
-sigmalow = 0.06
-sigmaup = 0.07
+# Plot the scaled sideband region for comparison
+analysis.plotMassSideband(20, bestalpha, 0.10)
 
+# Count number of expected signal and background events in signal region
 hist_bkg = analysis.GetMassDistribution(2)
-low = hist_bkg.FindBin(125.-0.5*(bestwidth_exp1))
-high = hist_bkg.FindBin(125. + 0.5*(bestwidth_exp1))
-nbkg = hist_bkg.Integral(low, high)
-
-print("\nUsing optimal signal region width {:.2f} and bkg. scale factor {:.2f}:".format(bestwidth_exp1, bestalpha))
-print("      unscaled bkg. events: {:.3f}".format(nbkg))
-print("      scaled bkg. events:   {:.3f} -{:.3f} +{:.3f}".format(nbkg*bestalpha, sigmalow*nbkg, sigmaup*nbkg))
-
-# Find number of signal events in the signal region
 hist_signal = analysis.GetMassDistribution(0)
-low = hist_signal.FindBin(125.-0.5*(bestwidth_exp1))
-high = hist_signal.FindBin(125. + 0.5*(bestwidth_exp1))
-nsig = hist_signal.Integral(low,high)
-print("      unscaled sig. events: {:.3f}\n".format(nsig))
+hist_data = analysis.GetMassDistribution(3)
 
-# Find expected significance
-#Ntoys = 1e6
-Ntoys = 100
-print("Calculating the expected significance using {} toys:".format(Ntoys))
-pvalue = analysis.ExpectedSignificance_ToyMC(nbkg, nsig, sigmalow*nbkg, Ntoys)
+nbkg = analysis.count_events(hist_bkg, signal_width)        # events under H0
+nsignal = analysis.count_events(hist_signal, signal_width)  # signal events
+ndata = analysis.count_events(hist_data, signal_width)      # observed events
+
+print("\nIn the signal region of width {:.2f} GeV:".format(signal_width))
+print("      expected bkg. events: {:.3f}".format(nbkg))
+print("      expected sig. events: {:.3f}".format(nsignal))
+print("      observed events:      {:.3f}".format(ndata))
+
+nbkg_scaled = nbkg*bestalpha        # scaled bkg events in signal region
+d_nbkg_scaled = sigmaup*nbkg        # Unc. on the scaled bkg estimate
+
+print("      scaled bkg. events:   {:.3f} -{:.3f} +{:.3f}\n".format(nbkg_scaled, sigmalow*nbkg, sigmaup*nbkg))
+
+# Calculate the expected and observed significance with new background estimate
+
+if int(sys.argv[1]) == 0: Ntoys = 100
+if int(sys.argv[1]) != 0: Ntoys = 1e6
+
+d_nbkg = 0.10                       # Error on the bkg estimate
+d_nbkg_scaled = sigmaup*nbkg        # Error on the scaled bkg estimate
+
+pvalue_exp = analysis.ExpectedSignificance_ToyMC(nbkg_scaled, nsignal, d_nbkg_scaled, Ntoys)
+pvalue_obs = stat.IntegratePoissonFromRight(ndata, nbkg_scaled)
+
+sigma_exp = ro.Math.gaussian_quantile_c(pvalue_exp, 1)
+sigma_obs = ro.Math.gaussian_quantile_c(pvalue_obs, 1)
+
+print("      expected p-value = {:.3f}, sigificance = {:.3f}".format(pvalue_exp, sigma_exp))
+print("      observed p-value = {:.3f}, sigificance = {:.3f}".format(pvalue_obs, sigma_obs))
+
+print("------------------------------------------------------------------------")
+print("\nUsing the unscaled MC estimate and a relative error of 10 percent:\n")
+
+pvalue_exp_unsc = analysis.ExpectedSignificance_ToyMC(nbkg, nsignal, d_nbkg, Ntoys)
+pvalue_obs_unsc = stat.IntegratePoissonFromRight(ndata, nbkg)
+
+sigma_exp_unsc = ro.Math.gaussian_quantile_c(pvalue_exp_unsc, 1)
+sigma_obs_unsc = ro.Math.gaussian_quantile_c(pvalue_obs_unsc, 1)
+
+print("      expected p-value = {:.3f}, sigificance = {:.3f}".format(pvalue_exp_unsc, sigma_exp_unsc))
+print("      observed p-value = {:.3f}, sigificance = {:.3f}".format(pvalue_obs_unsc, sigma_obs_unsc))
+print("------------------------------------------------------------------------")
 
 ################################################################################
 
-print("\nCalculating test-statisitic for real data:")
+print("\nCalculating observed test-statisitic:")
 hist_data = analysis.GetMassDistribution(3)
 hist_signal = analysis.GetMassDistribution(0)
 hist_bkg = analysis.GetMassDistribution(2)
@@ -76,39 +119,61 @@ t_data = analysis.Get_TestStatistic(hist_data, hist_bkg, hist_signal)
 print("      t = {:.3f}\n".format(t_data))
 
 ###############################################################################
-# Execute toy generator before moving on
+# Execute toy generator before moving on, if this is already calculated there
+# is no need to do it again. Just comment out the line below.
+#ntoys, sf_bkg= 1, sf_sig=1, rebinN=1)
 
-def calc_mc():
-    #check if the MC has already been calculated:
-    path = "output/histograms/test_statistic_distribution.root"
-
-    if os.path.isfile(path) == True:
-        answer = input("Do you want to use existing distributions for test-statistics? [y]")
-        if answer != "y":
-            analysis.Generate_toys()
-
-    if os.path.isfile(path) == False:
-        print("Need to calculate distributions for test-statistics")
-        answer = input("This may take some time. Continue? [y]")
-        if answer == "y":
-            analysis.Generate_toys()
-        else:
-            print("Quitting..")
-            quit()
-
-if int(sys.argv[1]) == 1:
-    calc_mc()
+if int(sys.argv[1]) != 0:
+    analysis.Generate_toys(10000, 1, 1, 1)
 
 ###############################################################################
 
 # Get the test-statistic distributions from file
-histograms = ["test_statistic_bkg", "test_statistic_sb", "test_statistic_data"]
-infile = ro.TFile("output/histograms/test_statistic_distribution.root", "READ")
+histograms = ["test_statistic_bkg", "test_statistic_sb"]
+infile = ro.TFile("output/histograms/test_statistic_distribution_sfb1_sfs1_toys10000_bin1.root", "READ")
 hist_distribution_b = infile.Get(histograms[0]).Clone("h_tdist_b")
 hist_distribution_sb = infile.Get(histograms[1]).Clone("h_tdist_sb")
-#hist_distribution_data = infile.Get(histograms[2]).Clone("h_tdist_data")
 infile.Close()
 
 analysis.analyze_distributions(hist_distribution_b, hist_distribution_sb, t_data, "plot")
 
+
 ###############################################################################
+# different luminosity scale factor
+
+def new_scales(sfb, sfs, rebinN, ntoys):
+    print("-----------------------------------------------------")
+    print("Using luminosity scale factor:", sfb)
+
+    hist_dat_scaled = analysis.GetMassDistribution(3, sfs, rebinN)
+    hist_sig_scaled = analysis.GetMassDistribution(0, sfs, rebinN)
+    hist_bkg_scaled = analysis.GetMassDistribution(2, sfb, rebinN)
+
+    t_obs_scaled = analysis.Get_TestStatistic(hist_dat_scaled, hist_bkg_scaled, hist_sig_scaled)
+    print("      t = {:.3f}\n".format(t_obs_scaled))
+
+    #analysis.Generate_toys(ntoys, sfb, sfs, rebinN)
+
+    histograms = ["test_statistic_bkg", "test_statistic_sb"]
+    infile1 = ro.TFile("output/histograms/test_statistic_distribution_sfb{}_sfs{}_toys{}_bin{}.root".format(sfb, sfs, ntoys,rebinN), "READ")
+    hist_dist_b_scaled = infile1.Get(histograms[0]).Clone("h_tdist_b_scaled")
+    hist_dist_sb_scaled = infile1.Get(histograms[1]).Clone("h_tdist_sb_scaled")
+    infile1.Close()
+
+    analysis.analyze_distributions(hist_dist_b_scaled, hist_dist_sb_scaled, t_obs_scaled, "plot")
+
+    print(" ")
+
+
+
+#new_scales(1.5, 1.5, 10, 10000)
+#new_scales(2.0, 2.0, 10, 10000)
+#new_scales(5.0, 5.0, 10, 10000)
+########################################################################
+#analysis.signal_fit(bestalpha, 1, 1)
+
+hist_loglik, sf_sig, sf_bkg  = analysis.muFit(1, 100)
+analysis.plot_mu(hist_loglik, sf_sig, sf_bkg)
+
+c11 = analysis.extrapolate("clb")
+c22 = analysis.extrapolate("clsb")
