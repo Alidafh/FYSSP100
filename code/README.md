@@ -29,12 +29,12 @@ Simply type 0 (zero) to initiate a quick run, or some other key to run the full 
 ## Credits
 This analysis is based on the chapter "Analysis Walkthrough" in the book Data Analysis in High Energy Physics: A Practical Guide to Statistical Methods, Wiley-VCH (2013) and the code is based on the skeleton code written by Ivo van Vulpen and Aart Heijboer in 2013
 
-Project: Exercises 11.1-11.3
-File: Walkthrough_skeleton.C
-Author: Ivo van Vulpen, Aart Heijboer
-Version (date): 1.0 (23.06.2013)
-Copyright (C) 2013, Ivo van Vulpen, Aart Heijboer
-All rights reserved.
+Project: Exercises 11.1-11.3\  
+File: Walkthrough_skeleton.C\  
+Author: Ivo van Vulpen, Aart Heijboer\  
+Version (date): 1.0 (23.06.2013)\  
+Copyright (C) 2013, Ivo van Vulpen, Aart Heijboer\
+All rights reserved.\  
 
 ### TODO:
 - Should implement in c++, loops in python slow.
