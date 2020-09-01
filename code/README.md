@@ -24,7 +24,7 @@ output/histograms/test_statistic_distribution_sfb5.0_sfs5.0_toys10000_bin10.root
 To use these distributions in the analysis type 0 (recommended)
 To calculate new distributions press any key:
 ```
-Simply type 0 (zero) to initiate a quick run or some other key to run the full analysis again.
+Simply type 0 (zero) to initiate a quick run, or some other key to run the full analysis again.
 
 ## Credits
 This analysis is based on the chapter "Analysis Walkthrough" in the book Data Analysis in High Energy Physics: A Practical Guide to Statistical Methods, Wiley-VCH (2013) and the code is based on the skeleton code written by Ivo van Vulpen and Aart Heijboer in 2013
@@ -36,4 +36,7 @@ Version (date): 1.0 (23.06.2013)
 Copyright (C) 2013, Ivo van Vulpen, Aart Heijboer, All rights reserved.
 
 ### TODO:
-- allow varying the signal scale factor.
+- Should implement in c++, loops in python slow.
+- Make functions more general to be applicable on other datasets.
+- Make statistics.py a module so it does not have to be in the working dir.
+- 
