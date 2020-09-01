@@ -225,13 +225,13 @@ def find_fit_parameter(hist, name = "", plot=""):
         print("      figure saved in: output/figures/proj_loglik_{}.png".format(name))
 
     if (plot=="sideband"):
-        c = ro.TCanvas("c{}".format(rebinN), "c", 1000, 600)
+        c = ro.TCanvas("c{}".format(plot), "c", 1000, 600)
         c.cd()
         hist.SetAxisRange(1364, 1368, "Y")
         hist.SetAxisRange(1, 1.25, "X")
         hist.Draw("L")
 
-        line = ro.TLine(bestalpha, 1364, bestalpha, min_value+1)
+        line = ro.TLine(scalefactor, 1364, scalefactor, min_value+1)
         line.SetLineStyle(7); line.SetLineColor(ro.kGray+2)
         line.Draw()
 
@@ -251,8 +251,8 @@ def find_fit_parameter(hist, name = "", plot=""):
         line4.SetLineStyle(7); line4.SetLineColor(ro.kGray+2)
         line4.Draw()
 
-        arrow1 = ro.TArrow(low_value, min_value+1, bestalpha, min_value+1, 0.01,"<|>")
-        arrow2 = ro.TArrow(bestalpha, min_value+1, up_value, min_value+1, 0.01,"<|>")
+        arrow1 = ro.TArrow(low_value, min_value+1, scalefactor, min_value+1, 0.01,"<|>")
+        arrow2 = ro.TArrow(scalefactor, min_value+1, up_value, min_value+1, 0.01,"<|>")
 
         arrow1.Draw()
         arrow2.Draw()
@@ -269,8 +269,8 @@ def find_fit_parameter(hist, name = "", plot=""):
 
         c.Update()
         #c.Draw()
-        Quiet(c.SaveAs)("output/figures/neg_loglikelihood_{}.png".format(rebinN))
-        print("      figure saved in: output/figures/neg_loglikelihood_{}.png".format(rebinN))
+        Quiet(c.SaveAs)("output/figures/neg_loglikelihood_{}.png".format(plot))
+        print("      figure saved in: output/figures/neg_loglikelihood_{}.png".format(plot))
 
     sf_result = np.array([scalefactor, low, up])
     return sf_result
@@ -562,7 +562,7 @@ def analyze_distributions(h_teststat_bkg, h_teststat_sb, t_data, plot=0):
         hist_2sigma.Draw("same hist")
         hist_1sigma.Draw("same hist")
         h_teststat_sb.Draw("same hist")
-        #arrow.Draw()
+        if int(abs(t_data)) == 11: arrow.Draw()
         legend.Draw()
         #text(0.39, 0.83, "data", 0.033)
         c.Update()
@@ -808,8 +808,8 @@ def muFit(rebinN, nscale, plot = "", sf_bkg=1, sf_sig=1):
         hist_loglik.SetAxisRange(0.9, 1.3, "X")
         hist_loglik.SetAxisRange(0.2, 2.8, "Y")
         m = ro.TMarker(bestalpha, bestmu, 20)
-        #hist_loglik.Draw("colz")
-        dhist.Draw("cont3")
+        hist_loglik.Draw("colz")
+        #dhist.Draw("cont3")
         m.Draw()
         c_par.Update()
         Quiet(c_par.SaveAs)("output/figures/countour_fit_parameters_{}.png".format(rebinN))

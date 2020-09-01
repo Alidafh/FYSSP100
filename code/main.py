@@ -156,5 +156,4 @@ analysis.extrapolate(zCLsb_list, "CLsb")
 
 ########################################################################
 
-hist_loglik, sf_sig, sf_bkg  = analysis.muFit(1, 100)
-analysis.plot_mu(hist_loglik, sf_sig, sf_bkg)
+hist_loglik, sf_sig, sf_bkg  = analysis.muFit(10, 100, "plot")
