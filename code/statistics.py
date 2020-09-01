@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import ROOT as ro
 
-"""
+
 def Poisson(lamb, k):
     #return np.log(lamb) * S - np.loggamma(S + 1) - lamb
     return (lamb**k * np.exp(-lamb))/np.math.factorial(k)
@@ -17,7 +17,7 @@ def significance(s, b, n):
     Z_exp = np.nan_to_num(np.sqrt(2*(s+b)*np.log(1+(s/b)) - 2*s))
     Z_obs = np.nan_to_num(np.sqrt(2*n*np.log(n/b) - 2*(n-b)))
     return Z_exp, Z_obs
-"""
+
 
 def sigFromP(pval, chisquare = "yes"):
     if chisquare != "yes": Z = ro.Math.gaussian_quantile_c(expected_p, 1)
